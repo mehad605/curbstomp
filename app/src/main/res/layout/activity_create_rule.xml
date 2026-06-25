@@ -1,0 +1,479 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?attr/colorSurfaceContainerLowest">
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="?attr/colorSurface"
+        android:elevation="0dp"
+        app:title="CREATE RULE"
+        app:titleTextAppearance="@style/TextAppearance.AppCompat.Medium"
+        app:navigationIcon="?attr/homeAsUpIndicator"
+        app:titleTextColor="?attr/colorPrimary"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <View
+        android:id="@+id/toolbarDivider"
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="?attr/colorOutlineVariant"
+        app:layout_constraintTop_toBottomOf="@id/toolbar" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        app:layout_constraintTop_toBottomOf="@id/toolbarDivider"
+        app:layout_constraintBottom_toTopOf="@id/bottomBarDivider">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:boxBackgroundMode="filled"
+                app:boxBackgroundColor="@android:color/transparent"
+                app:boxStrokeWidth="0dp"
+                app:boxStrokeWidthFocused="0dp"
+                android:layout_marginBottom="24dp">
+                
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etRuleName"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Rule Name (e.g. Work Hours)"
+                    android:fontFamily="@font/inter"
+                    android:textColor="?attr/colorPrimary"
+                    android:background="@android:color/transparent"
+                    android:inputType="textCapWords" />
+                
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="?attr/colorPrimary" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:weightSum="2"
+                android:layout_marginBottom="24dp">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnStartTime"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="56dp"
+                    android:layout_marginEnd="8dp"
+                    app:cornerRadius="0dp"
+                    app:strokeColor="?attr/colorPrimary"
+                    app:strokeWidth="1dp"
+                    android:textColor="?attr/colorPrimary"
+                    android:fontFamily="@font/inter"
+                    android:text="START: 09:00" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnEndTime"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="56dp"
+                    android:layout_marginStart="8dp"
+                    app:cornerRadius="0dp"
+                    app:strokeColor="?attr/colorPrimary"
+                    app:strokeWidth="1dp"
+                    android:textColor="?attr/colorPrimary"
+                    android:fontFamily="@font/inter"
+                    android:text="END: 17:00" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="REPEATING DAYS"
+                android:fontFamily="@font/inter"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.08"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:layout_marginBottom="16dp"/>
+
+            <LinearLayout
+                android:id="@+id/chipGroupDays"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginBottom="24dp"
+                android:weightSum="7">
+                
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chipSun"
+                    style="@style/Widget.Material3.Chip.Filter"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="4dp"
+                    app:ensureMinTouchTargetSize="false"
+                    app:chipMinHeight="36dp"
+                    app:chipCornerRadius="4dp"
+                    app:checkedIconVisible="false"
+                    app:chipBackgroundColor="@color/day_chip_background"
+                    android:textColor="@color/day_chip_text"
+                    app:chipStrokeColor="?attr/colorOutlineVariant"
+                    app:chipStrokeWidth="1dp"
+                    android:textAlignment="center"
+                    android:gravity="center"
+                    app:chipStartPadding="0dp"
+                    app:chipEndPadding="0dp"
+                    app:textStartPadding="0dp"
+                    app:textEndPadding="0dp"
+                    android:text="S" />
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chipMon"
+                    style="@style/Widget.Material3.Chip.Filter"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="4dp"
+                    app:ensureMinTouchTargetSize="false"
+                    app:chipMinHeight="36dp"
+                    app:chipCornerRadius="4dp"
+                    app:checkedIconVisible="false"
+                    app:chipBackgroundColor="@color/day_chip_background"
+                    android:textColor="@color/day_chip_text"
+                    app:chipStrokeColor="?attr/colorOutlineVariant"
+                    app:chipStrokeWidth="1dp"
+                    android:textAlignment="center"
+                    android:gravity="center"
+                    app:chipStartPadding="0dp"
+                    app:chipEndPadding="0dp"
+                    app:textStartPadding="0dp"
+                    app:textEndPadding="0dp"
+                    android:text="M" />
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chipTue"
+                    style="@style/Widget.Material3.Chip.Filter"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="4dp"
+                    app:ensureMinTouchTargetSize="false"
+                    app:chipMinHeight="36dp"
+                    app:chipCornerRadius="4dp"
+                    app:checkedIconVisible="false"
+                    app:chipBackgroundColor="@color/day_chip_background"
+                    android:textColor="@color/day_chip_text"
+                    app:chipStrokeColor="?attr/colorOutlineVariant"
+                    app:chipStrokeWidth="1dp"
+                    android:textAlignment="center"
+                    android:gravity="center"
+                    app:chipStartPadding="0dp"
+                    app:chipEndPadding="0dp"
+                    app:textStartPadding="0dp"
+                    app:textEndPadding="0dp"
+                    android:text="T" />
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chipWed"
+                    style="@style/Widget.Material3.Chip.Filter"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="4dp"
+                    app:ensureMinTouchTargetSize="false"
+                    app:chipMinHeight="36dp"
+                    app:chipCornerRadius="4dp"
+                    app:checkedIconVisible="false"
+                    app:chipBackgroundColor="@color/day_chip_background"
+                    android:textColor="@color/day_chip_text"
+                    app:chipStrokeColor="?attr/colorOutlineVariant"
+                    app:chipStrokeWidth="1dp"
+                    android:textAlignment="center"
+                    android:gravity="center"
+                    app:chipStartPadding="0dp"
+                    app:chipEndPadding="0dp"
+                    app:textStartPadding="0dp"
+                    app:textEndPadding="0dp"
+                    android:text="W" />
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chipThu"
+                    style="@style/Widget.Material3.Chip.Filter"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="4dp"
+                    app:ensureMinTouchTargetSize="false"
+                    app:chipMinHeight="36dp"
+                    app:chipCornerRadius="4dp"
+                    app:checkedIconVisible="false"
+                    app:chipBackgroundColor="@color/day_chip_background"
+                    android:textColor="@color/day_chip_text"
+                    app:chipStrokeColor="?attr/colorOutlineVariant"
+                    app:chipStrokeWidth="1dp"
+                    android:textAlignment="center"
+                    android:gravity="center"
+                    app:chipStartPadding="0dp"
+                    app:chipEndPadding="0dp"
+                    app:textStartPadding="0dp"
+                    app:textEndPadding="0dp"
+                    android:text="T" />
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chipFri"
+                    style="@style/Widget.Material3.Chip.Filter"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="4dp"
+                    app:ensureMinTouchTargetSize="false"
+                    app:chipMinHeight="36dp"
+                    app:chipCornerRadius="4dp"
+                    app:checkedIconVisible="false"
+                    app:chipBackgroundColor="@color/day_chip_background"
+                    android:textColor="@color/day_chip_text"
+                    app:chipStrokeColor="?attr/colorOutlineVariant"
+                    app:chipStrokeWidth="1dp"
+                    android:textAlignment="center"
+                    android:gravity="center"
+                    app:chipStartPadding="0dp"
+                    app:chipEndPadding="0dp"
+                    app:textStartPadding="0dp"
+                    app:textEndPadding="0dp"
+                    android:text="F" />
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chipSat"
+                    style="@style/Widget.Material3.Chip.Filter"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    app:ensureMinTouchTargetSize="false"
+                    app:chipMinHeight="36dp"
+                    app:chipCornerRadius="4dp"
+                    app:checkedIconVisible="false"
+                    app:chipBackgroundColor="@color/day_chip_background"
+                    android:textColor="@color/day_chip_text"
+                    app:chipStrokeColor="?attr/colorOutlineVariant"
+                    app:chipStrokeWidth="1dp"
+                    android:textAlignment="center"
+                    android:gravity="center"
+                    app:chipStartPadding="0dp"
+                    app:chipEndPadding="0dp"
+                    app:textStartPadding="0dp"
+                    app:textEndPadding="0dp"
+                    android:text="S" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="ENFORCEMENT PROTOCOL"
+                android:fontFamily="@font/inter"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.08"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:layout_marginBottom="8dp"/>
+                
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="?attr/colorOutlineVariant"
+                android:layout_marginBottom="16dp"/>
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardAllowOnly"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                app:cardBackgroundColor="?attr/colorSurface"
+                app:cardCornerRadius="0dp"
+                app:strokeWidth="1dp"
+                app:strokeColor="?attr/colorOutlineVariant">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:padding="16dp"
+                    android:gravity="center_vertical">
+                    
+                    <ImageView
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        app:tint="#4CAF50"
+                        android:src="@drawable/ic_check_circle"
+                        android:layout_marginEnd="16dp" />
+                        
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+                        
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Allow Only These"
+                            android:textStyle="bold"
+                            android:textColor="?attr/colorOnSurface"
+                            android:textSize="14sp" />
+                            
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Block everything else. Maximum restriction."
+                            android:textColor="?attr/colorOnSurfaceVariant"
+                            android:textSize="12sp"
+                            android:layout_marginTop="2dp" />
+                    </LinearLayout>
+                    
+                    <RadioButton
+                        android:id="@+id/rbAllowOnly"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:clickable="false"
+                        android:buttonTint="?attr/colorOnSurfaceVariant"
+                        android:layout_marginStart="8dp" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardBlockThese"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="32dp"
+                app:cardBackgroundColor="?attr/colorSurface"
+                app:cardCornerRadius="0dp"
+                app:strokeWidth="1dp"
+                app:strokeColor="?attr/colorOutlineVariant">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:padding="16dp"
+                    android:gravity="center_vertical">
+                    
+                    <ImageView
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        app:tint="#FF5722"
+                        android:src="@drawable/ic_block_aesthetic"
+                        android:layout_marginEnd="16dp" />
+                        
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+                        
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Block These"
+                            android:textStyle="bold"
+                            android:textColor="?attr/colorOnSurface"
+                            android:textSize="14sp" />
+                            
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Blacklist specific applications only."
+                            android:textColor="?attr/colorOnSurfaceVariant"
+                            android:textSize="12sp"
+                            android:layout_marginTop="2dp" />
+                    </LinearLayout>
+                    
+                    <RadioButton
+                        android:id="@+id/rbBlockThese"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:clickable="false"
+                        android:buttonTint="?attr/colorOnSurfaceVariant"
+                        android:layout_marginStart="8dp" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="8dp">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:text="SELECTED APPS"
+                    android:fontFamily="@font/inter"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.08"
+                    android:textColor="?attr/colorOnSurfaceVariant"/>
+                    
+                <Button
+                    android:id="@+id/btnAddApps"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="?attr/colorPrimary"
+                    app:cornerRadius="0dp"
+                    android:fontFamily="@font/inter"
+                    android:text="ADD APPS" />
+            </LinearLayout>
+            
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="?attr/colorOutlineVariant"
+                android:layout_marginBottom="8dp"/>
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rvSelectedApps"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:nestedScrollingEnabled="false"
+                tools:listitem="@layout/item_app_limit"/>
+
+        </LinearLayout>
+    </ScrollView>
+
+    <View
+        android:id="@+id/bottomBarDivider"
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="?attr/colorOutlineVariant"
+        app:layout_constraintBottom_toTopOf="@id/bottomBar" />
+
+    <FrameLayout
+        android:id="@+id/bottomBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="?attr/colorSurface"
+        android:padding="16dp"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <Button
+            android:id="@+id/btnSave"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:text="SAVE RULE"
+            android:fontFamily="@font/inter"
+            android:textSize="14sp"
+            android:letterSpacing="0.08"
+            android:textStyle="bold"
+            app:cornerRadius="0dp"
+            android:backgroundTint="?attr/colorPrimary"
+            android:textColor="?attr/colorOnPrimary" />
+    </FrameLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>

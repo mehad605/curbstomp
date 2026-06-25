@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Curbstomp</string>
+    <string name="accessibility_permission_app_blocker">
+        Curbstomp uses Accessibility to:\n1. Detect when you open an app and enforce block/allow rules\n2. Send you home when a blocked app is opened during a rule or focus session\n3. Protect Curbstomp from being force-stopped or uninstalled\n\n
+        All processing happens on your device. No data is collected or transmitted.
+    </string>
+    <string name="admin_permission_desc">Curbstomp Anti-Uninstall Protection</string>
+</resources>

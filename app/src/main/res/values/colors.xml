@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Obsidian Gallery Aesthetic -->
+    <color name="md_theme_primary">#ffffff</color>
+    <color name="md_theme_onPrimary">#2f3131</color>
+    <color name="md_theme_primaryContainer">#e2e2e2</color>
+    <color name="md_theme_onPrimaryContainer">#636565</color>
+    <color name="md_theme_inversePrimary">#5d5f5f</color>
+    
+    <color name="md_theme_secondary">#c8c6c8</color>
+    <color name="md_theme_onSecondary">#303032</color>
+    <color name="md_theme_secondaryContainer">#474649</color>
+    <color name="md_theme_onSecondaryContainer">#b7b4b7</color>
+    
+    <color name="md_theme_tertiary">#ffffff</color>
+    <color name="md_theme_onTertiary">#313032</color>
+    <color name="md_theme_tertiaryContainer">#e5e1e4</color>
+    <color name="md_theme_onTertiaryContainer">#656466</color>
+    
+    <color name="md_theme_background">#09090B</color>
+    <color name="md_theme_onBackground">#FFFFFF</color>
+    
+    <color name="md_theme_surface">#121214</color>
+    <color name="md_theme_onSurface">#e4e1e5</color>
+    <color name="md_theme_surfaceVariant">#353437</color>
+    <color name="md_theme_onSurfaceVariant">#c4c7c8</color>
+    
+    <color name="md_theme_inverseSurface">#e4e1e5</color>
+    <color name="md_theme_inverseOnSurface">#303033</color>
+    
+    <color name="md_theme_outline">#8e9192</color>
+    <color name="md_theme_outlineVariant">#27272A</color>
+    
+    <color name="md_theme_surfaceContainerLowest">#09090B</color>
+    <color name="md_theme_surfaceDim">#131316</color>
+    <color name="md_theme_scrim">#0e0e11</color>
+
+    <color name="md_theme_error">#ffb4ab</color>
+    <color name="md_theme_onError">#690005</color>
+    <color name="md_theme_errorContainer">#93000a</color>
+    <color name="md_theme_onErrorContainer">#ffdad6</color>
+
+    <!-- Semantic / Legacy -->
+    <color name="error_color">#ffb4ab</color>
+    <color name="text_color">#FFFFFF</color>
+    <color name="splash_background">#09090B</color>
+
+    <color name="status_active">#FFFFFF</color>
+    <color name="status_active_bg">#18181B</color>
+    <color name="status_active_border">#3F3F46</color>
+</resources>

@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="16dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="10dp">
+
+        <!-- App icon + name -->
+        <ImageView
+            android:id="@+id/ivStatAppIcon"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:layout_marginEnd="10dp"
+            android:contentDescription="App Icon" />
+
+        <TextView
+            android:id="@+id/tvStatAppName"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:text="App Name"
+            android:textColor="?attr/colorOnSurface"
+            android:textSize="12sp"
+            android:fontFamily="@font/inter"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <!-- Used time -->
+        <TextView
+            android:id="@+id/tvStatUsage"
+            android:layout_width="60dp"
+            android:layout_height="wrap_content"
+            android:text="0m"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:textSize="12sp"
+            android:fontFamily="@font/inter"
+            android:gravity="end" />
+
+        <!-- Remaining time -->
+        <TextView
+            android:id="@+id/tvStatRemaining"
+            android:layout_width="64dp"
+            android:layout_height="wrap_content"
+            android:text="—"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:textSize="12sp"
+            android:fontFamily="@font/inter"
+            android:gravity="end" />
+
+    </LinearLayout>
+
+    <!-- Hidden progress bar (kept for adapter compat) -->
+    <ProgressBar
+        android:id="@+id/pbUsage"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="?attr/colorOutlineVariant"
+        android:alpha="0.15" />
+
+</LinearLayout>

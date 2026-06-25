@@ -1,0 +1,11 @@
+Curbstomp is an app blocker for Android that runs on your device.
+
+Create rules that block or allow specific apps during set hours on set days. Start instant focus sessions to lock down apps for a duration.
+
+Features:
+- Time-based rules with per-app limits
+- Instant focus sessions
+- Password lock for settings
+- Anti-uninstall protection
+
+Everything stays on your device.
