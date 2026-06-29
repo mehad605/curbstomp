@@ -1,4 +1,4 @@
-name: Build & Release Android App
+name: 🚀 Build & Release Curbstomp
 
 on:
   push:
@@ -7,124 +7,98 @@ on:
   workflow_dispatch:
     inputs:
       version_number:
-        description: 'Release version (e.g., v1.0.1)'
+        description: 'Release version (e.g. v1.0.0)'
         required: true
         type: string
-      generate_release_notes:
-        description: 'Auto-generate user-friendly release notes?'
-        type: boolean
-        required: false
-        default: true
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
   validate:
-    name: Lint & Test
+    name: 🧪 Lint & Test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - name: Checkout Code
+      - name: ⬇️ Checkout Code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.0
+      - name: ⚙️ Set up JDK 17
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
+      - name: 🐘 Setup Gradle
+        uses: gradle/actions/setup-gradle@d9c87d481d55275bb5441eef3fe0e46805f9ef70 # v3.5.0
         with:
-          cache-read-only: true
+          cache-read-only: ${{ github.event_name != 'push' }}
 
-      - name: Grant Execute Permissions
-        run: chmod +x ./gradlew
+      - name: 🔍 Run Lint
+        run: ./gradlew lint --no-daemon -Dorg.gradle.jvmargs="-Xmx4g -XX:+UseParallelGC"
 
-      - name: Run Lint
-        run: |
-          ./gradlew lint \
-            --no-daemon \
-            -Dorg.gradle.jvmargs="-Xmx4g -XX:+UseParallelGC"
-
-      - name: Run Unit Tests
-        run: |
-          ./gradlew test \
-            --no-daemon \
-            -Dorg.gradle.jvmargs="-Xmx4g -XX:+UseParallelGC"
+      - name: 🧪 Run Unit Tests
+        run: ./gradlew test --no-daemon -Dorg.gradle.jvmargs="-Xmx4g -XX:+UseParallelGC"
 
   release:
-    name: Build & Release Android App
-    runs-on: ubuntu-latest
+    name: 📦 Build & Release
     needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     steps:
-      - name: Checkout Code
+      - name: ⬇️ Checkout Code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.0
+      - name: ⚙️ Set up JDK 17
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
+      - name: 🐘 Setup Gradle
+        uses: gradle/actions/setup-gradle@d9c87d481d55275bb5441eef3fe0e46805f9ef70 # v3.5.0
         with:
-          cache-read-only: false
+          cache-read-only: true
 
-      - name: Grant Execute Permissions
-        run: chmod +x ./gradlew
-
-      - name: Validate & Determine Version
+      - name: 🏷️ Determine Version
         id: version
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version_number }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            RAW_VER="${{ github.event.inputs.version_number }}"
-            echo "GENERATE_NOTES=${{ github.event.inputs.generate_release_notes }}" >> $GITHUB_ENV
+            RAW_VER="$INPUT_VERSION"
           else
-            RAW_VER="${{ github.ref_name }}"
-            echo "GENERATE_NOTES=true" >> $GITHUB_ENV
+            RAW_VER="${GITHUB_REF_NAME}"
           fi
-
-          if ! echo "$RAW_VER" | grep -qE '^v?[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "::error::Invalid version format: '$RAW_VER'. Expected: v1.2.3 or 1.2.3"
-            exit 1
-          fi
-
-          CLEAN_VER=$(echo "$RAW_VER" | sed 's/^v//')
-
+          
+          CLEAN_VER="${RAW_VER#v}"
           IFS='.' read -r major minor patch <<< "$CLEAN_VER"
-          if [ "$minor" -gt 99 ] || [ "$patch" -gt 99 ]; then
-            echo "::error::Minor and patch version components must be 0–99 for version code to be unique."
-            exit 1
-          fi
           VERSION_CODE=$(( major * 10000 + minor * 100 + patch ))
 
           echo "VERSION=$RAW_VER" >> $GITHUB_ENV
           echo "CLEAN_VERSION=$CLEAN_VER" >> $GITHUB_ENV
           echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
-          echo "::notice::Building version $RAW_VER (code: $VERSION_CODE)"
 
-      - name: Decode Keystore
-        env:
-          SIGNING_KEY_BASE64: ${{ secrets.SIGNING_KEY }}
-        run: |
-          if [ -n "$SIGNING_KEY_BASE64" ]; then
-            # Decode the keystore inside the app subfolder as expected by KEYSTORE_PATH
-            echo "$SIGNING_KEY_BASE64" | base64 -di > app/signing-key.jks
-            echo "::notice::Keystore decoded successfully."
-          else
-            echo "::warning::SIGNING_KEY secret is not set — APK will be unsigned."
-          fi
+      - name: 🔐 Decode Keystore
+        uses: timheuer/base64-to-file@ca9e30baf83f7f26708fb0059af9a0973fe5f27e # v1.2.4
+        id: keystore
+        with:
+          fileName: 'signing-key.jks'
+          encodedString: ${{ secrets.SIGNING_KEY }}
 
-      - name: Build Release APK
-        # Environment variables configured specifically for curbstomp's app/build.gradle.kts release block
+      - name: 🛠️ Build Release APK
         env:
-          KEYSTORE_PATH: "signing-key.jks"
+          KEYSTORE_PATH: ${{ steps.keystore.outputs.filePath }}
           KEYSTORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
@@ -132,108 +106,33 @@ jobs:
           ./gradlew assembleRelease \
             --build-cache \
             --no-daemon \
-            --parallel \
             -Dorg.gradle.jvmargs="-Xmx4g -XX:+UseParallelGC" \
             -Dkotlin.compiler.execution.strategy="in-process" \
             -PVERSION_NAME="${{ env.CLEAN_VERSION }}" \
             -PVERSION_CODE="${{ env.VERSION_CODE }}"
 
-      - name: Verify APK Signature
+      - name: 📦 Rename Artifact
         run: |
-          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name "apksigner" -type f | sort -V | tail -n 1)
-          if [ -z "$APKSIGNER" ]; then
-            echo "::error::apksigner not found in $ANDROID_HOME/build-tools"
-            exit 1
-          fi
-          echo "Using apksigner: $APKSIGNER"
+          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          mv "$APK_PATH" ./Curbstomp-${{ env.VERSION }}.apk
 
-          APK="app/build/outputs/apk/release/Curbstomp-release.apk"
-          echo "Verifying: $APK"
-          if ! "$APKSIGNER" verify --verbose "$APK"; then
-            echo "::error::Signature verification failed: $APK"
-            exit 1
-          fi
-          echo "::notice::APK signature verified successfully."
-
-      - name: Rename & Package Artifacts
+      - name: 📝 Generate SHA-256 Checksums
         run: |
-          mv app/build/outputs/apk/release/Curbstomp-release.apk ./Curbstomp-${{ env.VERSION }}.apk
+          sha256sum Curbstomp-*.apk > SHA256SUMS.txt
 
-      - name: Generate Release Notes
-        id: notes
-        if: env.GENERATE_NOTES == 'true'
-        run: |
-          git fetch --tags --force
-          CURRENT_TAG="${{ env.VERSION }}"
-          PREV_TAG=$(
-            git tag --sort=-version:refname \
-            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
-            | grep -v "^${CURRENT_TAG}$" \
-            | head -n 1 \
-            || true
-          )
+      - name: 🛡️ Attest Build Provenance
+        uses: actions/attest-build-provenance@c074443f1aee8d4aeeae555aebba3282517141b2 # v1.4.3
+        with:
+          subject-path: 'Curbstomp-*.apk'
 
-          if [ -z "$PREV_TAG" ]; then
-            NOTES_HEADER="## What's New in $CURRENT_TAG\n\nInitial release."
-            COMMITS_LOG=$(git log --format="* %s" "$CURRENT_TAG" 2>/dev/null || true)
-          else
-            NOTES_HEADER="## What's New in $CURRENT_TAG\n\n### Changes since $PREV_TAG"
-            COMMITS_LOG=$(git log --format="* %s" "$PREV_TAG..$CURRENT_TAG" 2>/dev/null || true)
-          fi
-
-          FEATURES=""
-          FIXES=""
-          OTHER=""
-          while IFS= read -r line; do
-            [ -z "$line" ] && continue
-            lower=$(echo "$line" | tr '[:upper:]' '[:lower:]')
-            case "$lower" in
-              *"release"*|*"ci:"*|*"cd:"*|*"workflow"*|*"gitignore"*|*"readme"*|*"docs:"*|*"changelog"*|*"gradle"*|*"dependabot"*|*"bump"*|*"version"*)
-                continue ;;
-            esac
-            case "$lower" in
-              *"feat:"*|*"feature:"*|*"add"*|*"new"*|*"implement"*)
-                FEATURES="$FEATURES\n$line" ;;
-              *"fix:"*|*"bug"*|*"hotfix"*|*"patch"*)
-                FIXES="$FIXES\n$line" ;;
-              *)
-                OTHER="$OTHER\n$line" ;;
-            esac
-          done <<< "$(printf '%b' "$COMMITS_LOG")"
-
-          BODY="$NOTES_HEADER"
-          [ -n "$FEATURES" ] && BODY="$BODY\n\n### ✨ New Features\n$FEATURES"
-          [ -n "$FIXES" ]    && BODY="$BODY\n\n### 🐛 Bug Fixes\n$FIXES"
-          [ -n "$OTHER" ]    && BODY="$BODY\n\n### 🔧 Changes\n$OTHER"
-
-          {
-            echo "NOTES_BODY<<RELEASE_NOTES_DELIMITER"
-            printf '%b\n' "$BODY"
-            echo "RELEASE_NOTES_DELIMITER"
-          } >> $GITHUB_ENV
-
-      - name: Set Default Release Notes
-        if: env.GENERATE_NOTES != 'true'
-        run: |
-          {
-            echo "NOTES_BODY<<RELEASE_NOTES_DELIMITER"
-            echo "## Release ${{ env.VERSION }}"
-            echo "RELEASE_NOTES_DELIMITER"
-          } >> $GITHUB_ENV
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
+      - name: 🚀 Publish GitHub Release
+        uses: softprops/action-gh-release@c95fe1489396fe8a9eb87c0abf8aa5b2ef267fda # v2.2.1
         with:
           tag_name: ${{ env.VERSION }}
           name: Release ${{ env.VERSION }}
-          body: ${{ env.NOTES_BODY }}
+          generate_release_notes: true
           draft: false
           prerelease: false
           files: |
             Curbstomp-${{ env.VERSION }}.apk
-
-      - name: Cleanup Signing Key
-        if: always()
-        run: |
-          rm -f app/signing-key.jks
-          echo "::notice::Signing key removed from disk."
+            SHA256SUMS.txt
