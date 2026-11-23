@@ -76,6 +76,7 @@ class MainActivity : AppCompatActivity() {
     private var activeFocusJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        setTheme(R.style.Theme_Curbstomp)
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)

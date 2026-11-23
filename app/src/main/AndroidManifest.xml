@@ -32,13 +32,11 @@
         
         <activity
             android:name=".ui.activity.CreateRuleActivity"
-            android:exported="false"
-            android:theme="@style/Theme.Curbstomp.Splash" />
+            android:exported="false" />
 
         <activity
             android:name=".ui.activity.InstantFocusActivity"
-            android:exported="false"
-            android:theme="@style/Theme.Curbstomp.Splash" />
+            android:exported="false" />
 
         <activity
             android:name=".ui.activity.SelectAppsActivity"
