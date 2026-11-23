@@ -1,4 +1,4 @@
-name: 🚀 Build & Release Curbstomp
+name: Build & Release Curbstomp
 
 on:
   push:
@@ -7,45 +7,94 @@ on:
   workflow_dispatch:
     inputs:
       version_number:
-        description: 'Release version (e.g. v1.0.0)'
+        description: 'Release version (e.g. v1.1.0 or v1.2.0-rc.1)'
         required: true
         type: string
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
   validate:
-    name: 🧪 Lint & Test
+    name: Validate (Version, Test & Lint)
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      clean_version: ${{ steps.version.outputs.clean_version }}
+      version_code: ${{ steps.version.outputs.version_code }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+      apk_name: ${{ steps.version.outputs.apk_name }}
     steps:
-      - name: ⬇️ Checkout Code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - name: ⚙️ Set up JDK 17
-        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+      - name: Test release scripts
+        run: bash .github/scripts/test-release-scripts.sh
+
+      - name: Resolve and validate release version
+        id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ github.event.inputs.version_number }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            RAW_VER="$INPUT_VERSION"
+          else
+            RAW_VER="$GITHUB_REF_NAME"
+          fi
+          bash .github/scripts/resolve-release-version.sh "$RAW_VER" --github-output
+
+      - name: Guard against overwriting an existing tag on manual dispatch
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          if API_OUT="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG_NAME}" 2>&1)"; then
+            echo "Error: Tag '${TAG_NAME}' already exists. Bump the version instead of overwriting an existing release." >&2
+            exit 1
+          elif ! echo "$API_OUT" | grep -q "404"; then
+            echo "Error: Unexpected GitHub API error while checking tag '${TAG_NAME}':" >&2
+            echo "$API_OUT" >&2
+            exit 1
+          fi
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🐘 Setup Gradle
-        uses: gradle/actions/setup-gradle@d9c87d481d55275bb5441eef3fe0e46805f9ef70 # v3.5.0
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
-          cache-read-only: ${{ github.event_name != 'push' }}
+          cache-read-only: false
 
-      - name: 🔍 Run Lint
-        run: ./gradlew lint --no-daemon -Dorg.gradle.jvmargs="-Xmx4g -XX:+UseParallelGC"
+      - name: Run unit tests and Android Lint
+        run: ./gradlew test lint --build-cache --no-daemon --console=plain -Dorg.gradle.jvmargs="-Xmx4g -XX:+UseParallelGC"
 
-      - name: 🧪 Run Unit Tests
-        run: ./gradlew test --no-daemon -Dorg.gradle.jvmargs="-Xmx4g -XX:+UseParallelGC"
+      - name: Upload test and lint reports on failure
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: validate-reports
+          path: |
+            app/build/reports/lint-results-debug.html
+            app/build/reports/tests/
+          if-no-files-found: ignore
+          retention-days: 7
 
   release:
-    name: 📦 Build & Release
+    name: Build, Verify & Publish Release
     needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -54,85 +103,138 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - name: ⬇️ Checkout Code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
+          persist-credentials: false
 
-      - name: ⚙️ Set up JDK 17
-        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+      - name: Set up JDK 17
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🐘 Setup Gradle
-        uses: gradle/actions/setup-gradle@d9c87d481d55275bb5441eef3fe0e46805f9ef70 # v3.5.0
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
           cache-read-only: true
 
-      - name: 🏷️ Determine Version
-        id: version
-        env:
-          INPUT_VERSION: ${{ github.event.inputs.version_number }}
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            RAW_VER="$INPUT_VERSION"
-          else
-            RAW_VER="${GITHUB_REF_NAME}"
-          fi
-          
-          CLEAN_VER="${RAW_VER#v}"
-          IFS='.' read -r major minor patch <<< "$CLEAN_VER"
-          VERSION_CODE=$(( major * 10000 + minor * 100 + patch ))
-
-          echo "VERSION=$RAW_VER" >> $GITHUB_ENV
-          echo "CLEAN_VERSION=$CLEAN_VER" >> $GITHUB_ENV
-          echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
-
-      - name: 🔐 Decode Keystore
-        uses: timheuer/base64-to-file@ca9e30baf83f7f26708fb0059af9a0973fe5f27e # v1.2.4
+      - name: Validate signing secrets and decode keystore
         id: keystore
-        with:
-          fileName: 'signing-key.jks'
-          encodedString: ${{ secrets.SIGNING_KEY }}
-
-      - name: 🛠️ Build Release APK
         env:
-          KEYSTORE_PATH: ${{ steps.keystore.outputs.filePath }}
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for var in SIGNING_KEY SIGNING_STORE_PASSWORD SIGNING_KEY_ALIAS SIGNING_KEY_PASSWORD; do
+            if [[ -z "${!var}" ]]; then
+              echo "Error: Required release secret '${var}' is missing or empty." >&2
+              exit 1
+            fi
+          done
+
+          KEYSTORE_FILE="${RUNNER_TEMP}/signing-key.jks"
+          (
+            umask 077
+            printf '%s' "$SIGNING_KEY" | tr -d '\r\n ' | base64 --decode > "$KEYSTORE_FILE"
+          )
+
+          if [[ ! -s "$KEYSTORE_FILE" ]]; then
+            echo "Error: Decoded keystore file is empty." >&2
+            exit 1
+          fi
+          echo "path=${KEYSTORE_FILE}" >> "$GITHUB_OUTPUT"
+
+      - name: Build signed release APK
+        env:
+          KEYSTORE_PATH: ${{ steps.keystore.outputs.path }}
           KEYSTORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: |
+          set -euo pipefail
           ./gradlew assembleRelease \
             --build-cache \
             --no-daemon \
+            --console=plain \
             -Dorg.gradle.jvmargs="-Xmx4g -XX:+UseParallelGC" \
-            -Dkotlin.compiler.execution.strategy="in-process" \
-            -PVERSION_NAME="${{ env.CLEAN_VERSION }}" \
-            -PVERSION_CODE="${{ env.VERSION_CODE }}"
+            -PREQUIRE_RELEASE_SIGNING=true \
+            -PVERSION_NAME="${{ needs.validate.outputs.clean_version }}" \
+            -PVERSION_CODE="${{ needs.validate.outputs.version_code }}"
 
-      - name: 📦 Rename Artifact
+      - name: Verify signed APK signature, metadata, and footprint
         run: |
-          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
-          mv "$APK_PATH" ./Curbstomp-${{ env.VERSION }}.apk
+          set -euo pipefail
+          bash .github/scripts/verify-release-apk.sh \
+            "app/build/outputs/apk/release/Curbstomp-release.apk" \
+            "${{ needs.validate.outputs.clean_version }}" \
+            "${{ needs.validate.outputs.version_code }}"
 
-      - name: 📝 Generate SHA-256 Checksums
+      - name: Stage release artifacts and SHA-256 checksums
+        id: artifacts
+        env:
+          APK_NAME: ${{ needs.validate.outputs.apk_name }}
         run: |
-          sha256sum Curbstomp-*.apk > SHA256SUMS.txt
+          set -euo pipefail
+          SRC_APK="app/build/outputs/apk/release/Curbstomp-release.apk"
+          cp "$SRC_APK" "./${APK_NAME}"
+          sha256sum "${APK_NAME}" > SHA256SUMS.txt
 
-      - name: 🛡️ Attest Build Provenance
-        uses: actions/attest-build-provenance@c074443f1aee8d4aeeae555aebba3282517141b2 # v1.4.3
-        with:
-          subject-path: 'Curbstomp-*.apk'
+          SHA256="$(awk '{print $1}' SHA256SUMS.txt)"
+          SIZE_BYTES="$(wc -c < "./${APK_NAME}" | tr -d ' ')"
+          echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
+          echo "size_bytes=${SIZE_BYTES}" >> "$GITHUB_OUTPUT"
 
-      - name: 🚀 Publish GitHub Release
-        uses: softprops/action-gh-release@c95fe1489396fe8a9eb87c0abf8aa5b2ef267fda # v2.2.1
+      - name: Upload R8 mapping file for crash deobfuscation
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          tag_name: ${{ env.VERSION }}
-          name: Release ${{ env.VERSION }}
+          name: r8-mapping-${{ needs.validate.outputs.version }}
+          path: app/build/outputs/mapping/release/mapping.txt
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ${{ needs.validate.outputs.apk_name }}
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
+        with:
+          tag_name: ${{ needs.validate.outputs.version }}
+          name: Release ${{ needs.validate.outputs.version }}
           generate_release_notes: true
           draft: false
-          prerelease: false
+          prerelease: ${{ needs.validate.outputs.prerelease == 'true' }}
+          make_latest: ${{ needs.validate.outputs.prerelease == 'true' && 'false' || 'true' }}
+          fail_on_unmatched_files: true
           files: |
-            Curbstomp-${{ env.VERSION }}.apk
+            ${{ needs.validate.outputs.apk_name }}
             SHA256SUMS.txt
+
+      - name: Write release summary
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+          VERSION_CODE: ${{ needs.validate.outputs.version_code }}
+          PRERELEASE: ${{ needs.validate.outputs.prerelease }}
+          APK_NAME: ${{ needs.validate.outputs.apk_name }}
+          SIZE_BYTES: ${{ steps.artifacts.outputs.size_bytes }}
+          SHA256: ${{ steps.artifacts.outputs.sha256 }}
+        run: |
+          {
+            echo "### Release ${VERSION} Published"
+            echo ""
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Tag / Version | \`${VERSION}\` |"
+            echo "| Android \`versionCode\` | \`${VERSION_CODE}\` |"
+            echo "| Pre-release | \`${PRERELEASE}\` |"
+            echo "| APK Artifact | \`${APK_NAME}\` (${SIZE_BYTES} bytes) |"
+            echo "| SHA-256 | \`${SHA256}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Clean up decoded keystore
+        if: always()
+        run: rm -f "${RUNNER_TEMP}/signing-key.jks"

@@ -41,12 +41,29 @@ android {
         }
     }
 
+    val keystorePath = System.getenv("KEYSTORE_PATH")?.takeIf { it.isNotBlank() }
+    val requireReleaseSigning = (project.findProperty("REQUIRE_RELEASE_SIGNING") as? String)
+        ?.equals("true", ignoreCase = true) == true
+
+    if (requireReleaseSigning && keystorePath == null) {
+        throw GradleException("REQUIRE_RELEASE_SIGNING=true but KEYSTORE_PATH is unset or blank.")
+    }
+
     signingConfigs {
         create("release") {
-            storeFile = System.getenv("KEYSTORE_PATH")?.let { file(it) }
-            storePassword = System.getenv("KEYSTORE_PASSWORD")
-            keyAlias = System.getenv("KEY_ALIAS")
-            keyPassword = System.getenv("KEY_PASSWORD")
+            if (keystorePath != null) {
+                val storePass = System.getenv("KEYSTORE_PASSWORD")?.takeIf { it.isNotBlank() }
+                    ?: throw GradleException("KEYSTORE_PATH is set but KEYSTORE_PASSWORD is missing.")
+                val alias = System.getenv("KEY_ALIAS")?.takeIf { it.isNotBlank() }
+                    ?: throw GradleException("KEYSTORE_PATH is set but KEY_ALIAS is missing.")
+                val keyPass = System.getenv("KEY_PASSWORD")?.takeIf { it.isNotBlank() }
+                    ?: throw GradleException("KEYSTORE_PATH is set but KEY_PASSWORD is missing.")
+
+                storeFile = file(keystorePath)
+                storePassword = storePass
+                keyAlias = alias
+                keyPassword = keyPass
+            }
         }
     }
 
@@ -57,23 +74,25 @@ android {
             vcsInfo {
                 include = false
             }
-            signingConfig = if (System.getenv("KEYSTORE_PATH") != null) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
+            signingConfig = if (keystorePath != null) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-
-            applicationVariants.all {
-                val variant = this
-                variant.outputs
-                    .map { it as com.android.build.gradle.internal.api.BaseVariantOutputImpl }
-                    .forEach { output ->
-                        val outputFileName = "Curbstomp-${variant.name}.apk"
-                        println("OutputFileName: $outputFileName")
-                        output.outputFileName = outputFileName
-                    }
-            }
         }
+    }
+
+    applicationVariants.all {
+        val variant = this
+        variant.outputs
+            .map { it as com.android.build.gradle.internal.api.BaseVariantOutputImpl }
+            .forEach { output ->
+                output.outputFileName = "Curbstomp-${variant.name}.apk"
+            }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
