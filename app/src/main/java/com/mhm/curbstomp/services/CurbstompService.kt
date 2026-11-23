@@ -1,27 +1,22 @@
 package com.mhm.curbstomp.services
 
 import android.accessibilityservice.AccessibilityServiceInfo
-import android.app.admin.DevicePolicyManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
-import android.provider.Settings as AndroidSettings
-import android.provider.Telephony
-import android.telecom.TelecomManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import com.mhm.curbstomp.data.models.Settings
-import com.mhm.curbstomp.utils.RuleEngine
+import com.mhm.curbstomp.domain.RuleEngine
+import com.mhm.curbstomp.domain.SelfProtectionDetector
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -33,32 +28,22 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
+/**
+ * Event-driven AccessibilityService that enforces scheduled rules, Instant Focus sessions,
+ * Extra Harden, and anti-tamper self-protection with zero idle polling.
+ */
 class CurbstompService : BaseBlockingService() {
 
     private val serviceScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private val mainHandler = Handler(Looper.getMainLooper())
     private val stateMutex = Mutex()
+    private val packageResolver by lazy { SystemPackageResolver(this) }
 
     @Volatile
     private var currentSettings: Settings = Settings()
 
     @Volatile
     private var isScreenOn: Boolean = true
-
-    @Volatile
-    private var defaultLauncherPackage: String? = null
-
-    @Volatile
-    private var defaultDialerPackage: String? = null
-
-    @Volatile
-    private var defaultSmsPackage: String? = null
-
-    @Volatile
-    private var lastSystemPkgRefreshMs: Long = 0L
-
-    @Volatile
-    private var selfProtectionPackages: Set<String> = emptySet()
 
     private var activePackage: String? = null
     private var sessionStartElapsedMs: Long = 0L
@@ -71,35 +56,6 @@ class CurbstompService : BaseBlockingService() {
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED or AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
         private const val KICK_COOLDOWN_MS = 500L
         private const val CONTENT_SCAN_DEBOUNCE_MS = 200L
-        private const val SYSTEM_PKG_CACHE_TTL_MS = 5 * 60_000L
-
-        private const val FLAG_APP_NAME = 1 shl 0
-        private const val FLAG_DEVICE_ADMIN = 1 shl 1
-        private const val FLAG_DEACTIVATE = 1 shl 2
-        private const val FLAG_UNINSTALL = 1 shl 3
-        private const val FLAG_ACCESSIBILITY = 1 shl 4
-
-        private val CRITICAL_FALLBACK_PACKAGES = setOf(
-            "com.android.dialer",
-            "com.google.android.dialer",
-            "com.android.server.telecom",
-            "com.samsung.android.incallui",
-            "com.android.phone",
-            "com.google.android.contacts",
-            "com.android.contacts",
-            "com.samsung.android.dialer",
-            "com.samsung.android.contacts",
-            "com.google.android.apps.messaging",
-            "com.android.mms",
-            "com.samsung.android.messaging"
-        )
-
-        private val STATIC_SELF_PROTECTION_PACKAGES = setOf(
-            "com.android.settings",
-            "com.android.packageinstaller",
-            "com.google.android.packageinstaller",
-            "com.android.vending"
-        )
     }
 
     private val systemStateReceiver = object : BroadcastReceiver() {
@@ -124,10 +80,8 @@ class CurbstompService : BaseBlockingService() {
                     serviceScope.launch {
                         stateMutex.withLock {
                             if (isScreenOn) {
-                                val pkg = activePackage
-                                if (pkg != null) {
-                                    evaluateAndScheduleLocked(pkg, addUsageMillis = 0L)
-                                }
+                                val pkg = activePackage ?: return@withLock
+                                evaluateAndScheduleLocked(pkg, addUsageMillis = 0L)
                             }
                         }
                     }
@@ -138,38 +92,21 @@ class CurbstompService : BaseBlockingService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        val info = AccessibilityServiceInfo().apply {
+        serviceInfo = AccessibilityServiceInfo().apply {
             eventTypes = TARGET_EVENTS_MASK
             feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
             flags = AccessibilityServiceInfo.DEFAULT
             notificationTimeout = 100
         }
-        serviceInfo = info
 
         val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager
         isScreenOn = pm?.isInteractive ?: true
 
-        if (!receiverRegistered) {
-            val filter = IntentFilter().apply {
-                addAction(Intent.ACTION_SCREEN_OFF)
-                addAction(Intent.ACTION_SCREEN_ON)
-                addAction(Intent.ACTION_USER_PRESENT)
-                addAction(Intent.ACTION_TIME_CHANGED)
-                addAction(Intent.ACTION_TIMEZONE_CHANGED)
-            }
-            ContextCompat.registerReceiver(
-                this,
-                systemStateReceiver,
-                filter,
-                ContextCompat.RECEIVER_NOT_EXPORTED
-            )
-            receiverRegistered = true
-        }
-
-        refreshSystemPackages(force = true)
+        registerSystemStateReceiver()
+        packageResolver.refresh(force = true)
 
         serviceScope.launch {
-            dataStoreManager.settings.collectLatest { settings ->
+            settingsRepository.settings.collectLatest { settings ->
                 val previous = currentSettings
                 currentSettings = settings
                 cleanupExpiredInstantFocus(settings)
@@ -179,101 +116,41 @@ class CurbstompService : BaseBlockingService() {
                     previous.extraHardenEnabled != settings.extraHardenEnabled
                 if (policyChanged && isScreenOn) {
                     stateMutex.withLock {
-                        val pkg = activePackage
-                        if (pkg != null) {
-                            flushCurrentSessionLocked()
-                            evaluateAndScheduleLocked(pkg, addUsageMillis = 0L)
-                        }
+                        val pkg = activePackage ?: return@withLock
+                        flushCurrentSessionLocked()
+                        evaluateAndScheduleLocked(pkg, addUsageMillis = 0L)
                     }
                 }
             }
         }
     }
 
-    private fun refreshSystemPackages(force: Boolean = false) {
-        val now = SystemClock.elapsedRealtime()
-        if (!force && now - lastSystemPkgRefreshMs < SYSTEM_PKG_CACHE_TTL_MS) return
-        lastSystemPkgRefreshMs = now
-
-        try {
-            val homeIntent = Intent(Intent.ACTION_MAIN).apply { addCategory(Intent.CATEGORY_HOME) }
-            defaultLauncherPackage = packageManager
-                .resolveActivity(homeIntent, PackageManager.MATCH_DEFAULT_ONLY)
-                ?.activityInfo?.packageName
-        } catch (_: Exception) {}
-
-        try {
-            val telecomManager = getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
-            defaultDialerPackage = telecomManager?.defaultDialerPackage
-        } catch (_: Exception) {}
-
-        try {
-            defaultSmsPackage = Telephony.Sms.getDefaultSmsPackage(this)
-        } catch (_: Exception) {}
-
-        val targets = HashSet<String>(STATIC_SELF_PROTECTION_PACKAGES)
-        val selfUri = Uri.parse("package:$packageName")
-        val probeIntents = arrayOf(
-            Intent(AndroidSettings.ACTION_SETTINGS),
-            Intent(AndroidSettings.ACTION_ACCESSIBILITY_SETTINGS),
-            Intent(AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS, selfUri),
-            Intent(Intent.ACTION_DELETE, selfUri),
-            Intent(Intent.ACTION_UNINSTALL_PACKAGE, selfUri),
-            Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
+    private fun registerSystemStateReceiver() {
+        if (receiverRegistered) return
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_USER_PRESENT)
+            addAction(Intent.ACTION_TIME_CHANGED)
+            addAction(Intent.ACTION_TIMEZONE_CHANGED)
+        }
+        ContextCompat.registerReceiver(
+            this,
+            systemStateReceiver,
+            filter,
+            ContextCompat.RECEIVER_NOT_EXPORTED
         )
-        for (probe in probeIntents) {
-            try {
-                val resolved = packageManager.queryIntentActivities(probe, PackageManager.MATCH_DEFAULT_ONLY)
-                for (ri in resolved) {
-                    val pkg = ri.activityInfo?.packageName
-                    if (!pkg.isNullOrEmpty() && pkg != packageName) {
-                        targets.add(pkg)
-                    }
-                }
-            } catch (_: Exception) {}
-        }
-        selfProtectionPackages = targets
-    }
-
-    private fun isSelfProtectionTarget(pkg: String, eventType: Int): Boolean {
-        if (pkg.isEmpty() || pkg == packageName || pkg == "com.android.systemui") return false
-        if (pkg == defaultLauncherPackage) {
-            // Only inspect launcher on window-state transitions (e.g. in-launcher uninstall dialog),
-            // never on continuous home-screen scroll content updates.
-            return eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
-        }
-        if (selfProtectionPackages.contains(pkg)) return true
-        return pkg.startsWith("com.android.settings") ||
-            pkg.contains("packageinstaller") ||
-            pkg.startsWith("com.oplus.") ||
-            pkg.startsWith("com.coloros.") ||
-            pkg.startsWith("com.heytap.") ||
-            pkg.startsWith("com.oppo.") ||
-            pkg.startsWith("com.realme.") ||
-            pkg.startsWith("com.miui.security") ||
-            pkg.startsWith("com.samsung.android.lool")
+        receiverRegistered = true
     }
 
     private suspend fun cleanupExpiredInstantFocus(settings: Settings) {
-        val currentTime = System.currentTimeMillis()
-        val active = RuleEngine.pruneExpiredInstantFocus(settings.instantFocusSessions, currentTime)
+        val active = RuleEngine.pruneExpiredInstantFocus(
+            settings.instantFocusSessions,
+            System.currentTimeMillis()
+        )
         if (active !== settings.instantFocusSessions) {
-            dataStoreManager.updateInstantFocusSessions(active)
+            settingsRepository.updateInstantFocusSessions(active)
         }
-    }
-
-    private fun isCriticalSystemApp(packageName: String): Boolean {
-        if (packageName == this.packageName ||
-            packageName == "com.android.systemui" ||
-            packageName == defaultLauncherPackage
-        ) {
-            return true
-        }
-        refreshSystemPackages(force = false)
-        if (packageName == defaultDialerPackage || packageName == defaultSmsPackage) {
-            return true
-        }
-        return CRITICAL_FALLBACK_PACKAGES.contains(packageName)
     }
 
     private suspend fun flushCurrentSessionLocked() {
@@ -282,7 +159,7 @@ class CurbstompService : BaseBlockingService() {
         if (start <= 0L) return
         sessionStartElapsedMs = 0L
         val elapsed = (SystemClock.elapsedRealtime() - start).coerceAtLeast(0L)
-        if (elapsed <= 0L || isCriticalSystemApp(pkg)) return
+        if (elapsed <= 0L || packageResolver.isCriticalSystemApp(pkg)) return
 
         val result = RuleEngine.evaluatePackage(
             settings = currentSettings,
@@ -290,10 +167,9 @@ class CurbstompService : BaseBlockingService() {
             nowMillis = System.currentTimeMillis(),
             addUsageMillis = elapsed
         )
-        val updatedUsage = result.updatedUsageMap
-        if (updatedUsage != null) {
+        result.updatedUsageMap?.let { updatedUsage ->
             currentSettings = currentSettings.copy(appUsageMillis = updatedUsage)
-            dataStoreManager.updateAppUsageMillis(updatedUsage)
+            settingsRepository.updateAppUsageMillis(updatedUsage)
         }
     }
 
@@ -301,7 +177,7 @@ class CurbstompService : BaseBlockingService() {
         nextCheckJob?.cancel()
         nextCheckJob = null
 
-        if (!isScreenOn || isCriticalSystemApp(fgPackage)) {
+        if (!isScreenOn || packageResolver.isCriticalSystemApp(fgPackage)) {
             sessionStartElapsedMs = 0L
             return
         }
@@ -313,10 +189,9 @@ class CurbstompService : BaseBlockingService() {
             addUsageMillis = addUsageMillis
         )
 
-        val updatedUsage = result.updatedUsageMap
-        if (updatedUsage != null) {
+        result.updatedUsageMap?.let { updatedUsage ->
             currentSettings = currentSettings.copy(appUsageMillis = updatedUsage)
-            dataStoreManager.updateAppUsageMillis(updatedUsage)
+            settingsRepository.updateAppUsageMillis(updatedUsage)
         }
 
         if (result.blocked) {
@@ -333,24 +208,25 @@ class CurbstompService : BaseBlockingService() {
                 delay(wakeDelay)
                 stateMutex.withLock {
                     if (!isScreenOn || activePackage != fgPackage) return@withLock
-                    val start = sessionStartElapsedMs
-                    sessionStartElapsedMs = 0L
-                    val elapsed = if (start > 0L) {
-                        (SystemClock.elapsedRealtime() - start).coerceAtLeast(0L)
-                    } else {
-                        0L
-                    }
+                    val elapsed = consumeElapsedSessionMs()
                     evaluateAndScheduleLocked(fgPackage, addUsageMillis = elapsed)
                 }
             }
         }
     }
 
-    private fun kickUserOut(reason: String) {
-        if (!isDelayOver(lastBackPressTimeStamp, KICK_COOLDOWN_MS)) return
+    private fun consumeElapsedSessionMs(): Long {
+        val start = sessionStartElapsedMs
+        sessionStartElapsedMs = 0L
+        return if (start > 0L) (SystemClock.elapsedRealtime() - start).coerceAtLeast(0L) else 0L
+    }
+
+    private fun kickUserOut(reason: String, longToast: Boolean = false) {
+        if (!isCooldownElapsed(KICK_COOLDOWN_MS)) return
         pressHome()
+        val duration = if (longToast) Toast.LENGTH_LONG else Toast.LENGTH_SHORT
         mainHandler.post {
-            Toast.makeText(this, reason, Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, reason, duration).show()
         }
     }
 
@@ -363,20 +239,12 @@ class CurbstompService : BaseBlockingService() {
             if (!packageName.isNullOrEmpty()) {
                 serviceScope.launch {
                     stateMutex.withLock {
-                        val previous = activePackage
-                        if (previous != packageName) {
+                        if (activePackage != packageName) {
                             flushCurrentSessionLocked()
                             activePackage = packageName
                             evaluateAndScheduleLocked(packageName, addUsageMillis = 0L)
                         } else if (isScreenOn) {
-                            // Same package reopened or window updated: check immediate block without resetting tracked slice
-                            val start = sessionStartElapsedMs
-                            val elapsed = if (start > 0L) {
-                                (SystemClock.elapsedRealtime() - start).coerceAtLeast(0L)
-                            } else {
-                                0L
-                            }
-                            sessionStartElapsedMs = 0L
+                            val elapsed = consumeElapsedSessionMs()
                             evaluateAndScheduleLocked(packageName, addUsageMillis = elapsed)
                         }
                     }
@@ -393,7 +261,7 @@ class CurbstompService : BaseBlockingService() {
 
         // Fast-path filter BEFORE touching rootInActiveWindow (zero Binder IPC for normal user apps)
         val eventPkg = event.packageName?.toString() ?: ""
-        if (!isSelfProtectionTarget(eventPkg, eventType)) return
+        if (!packageResolver.isSelfProtectionTarget(eventPkg, eventType)) return
 
         if (eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
             val now = SystemClock.uptimeMillis()
@@ -404,50 +272,26 @@ class CurbstompService : BaseBlockingService() {
         val rootNode = rootInActiveWindow ?: return
         try {
             val rootPkg = rootNode.packageName?.toString() ?: ""
-            if (!isSelfProtectionTarget(rootPkg, eventType)) return
-
-            var initialFlags = 0
-            val eventClassName = event.className
-            if (eventClassName != null &&
-                (eventClassName.contains("DeviceAdmin", ignoreCase = true) ||
-                    eventClassName.contains("DevicePolicy", ignoreCase = true))
-            ) {
-                initialFlags = initialFlags or FLAG_DEVICE_ADMIN
-            }
+            if (!packageResolver.isSelfProtectionTarget(rootPkg, eventType)) return
 
             val settings = currentSettings
-            val isActivating =
-                System.currentTimeMillis() - settings.deviceAdminActivationRequestedAt < 180_000L
+            val initialFlags = SelfProtectionDetector.initialFlagsForClassName(event.className)
+            val isActivating = SelfProtectionDetector.isWithinDeviceAdminGraceWindow(
+                settings.deviceAdminActivationRequestedAt,
+                System.currentTimeMillis()
+            )
 
             val flags = scanNodeTree(rootNode, initialFlags, settings.antiUninstallEnabled, isActivating)
-            if (shouldBlockFromFlags(flags, settings.antiUninstallEnabled, isActivating)) {
-                if (!isDelayOver(lastBackPressTimeStamp, KICK_COOLDOWN_MS)) return
-                pressHome()
+            if (SelfProtectionDetector.shouldBlock(flags, settings.antiUninstallEnabled, isActivating)) {
                 val msg = if (settings.antiUninstallEnabled) {
                     "Self-protection: Cannot disable accessibility, force stop, clear data, deactivate admin, or uninstall Curbstomp!"
                 } else {
                     "Self-protection: Cannot disable accessibility, force stop, clear data, or uninstall Curbstomp!"
                 }
-                mainHandler.post {
-                    Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
-                }
+                kickUserOut(msg, longToast = true)
             }
         } finally {
             safeRecycle(rootNode)
-        }
-    }
-
-    private fun shouldBlockFromFlags(
-        flags: Int,
-        antiUninstallEnabled: Boolean,
-        isActivating: Boolean
-    ): Boolean {
-        if ((flags and FLAG_APP_NAME) == 0) return false
-        return when {
-            (flags and FLAG_DEVICE_ADMIN) != 0 ->
-                antiUninstallEnabled && (flags and FLAG_DEACTIVATE) != 0 && !isActivating
-            (flags and FLAG_ACCESSIBILITY) != 0 -> true
-            else -> (flags and FLAG_UNINSTALL) != 0
         }
     }
 
@@ -457,21 +301,9 @@ class CurbstompService : BaseBlockingService() {
         antiUninstallEnabled: Boolean,
         isActivating: Boolean
     ): Int {
-        var flags = updateFlagsFromText(node.text, currentFlags)
-        flags = updateFlagsFromText(node.contentDescription, flags)
-
-        // Short-circuit only when DeviceAdmin screen cannot flip a tentative uninstall match:
-        // Accessibility matches unconditionally; DeviceAdmin+Deactivate matches unconditionally;
-        // Uninstall match still needs full tree check only if FLAG_DEVICE_ADMIN isn't yet known.
-        if ((flags and FLAG_APP_NAME) != 0 && (flags and FLAG_ACCESSIBILITY) != 0) {
-            return flags
-        }
-        if ((flags and FLAG_APP_NAME) != 0 &&
-            (flags and FLAG_DEVICE_ADMIN) != 0 &&
-            antiUninstallEnabled &&
-            (flags and FLAG_DEACTIVATE) != 0 &&
-            !isActivating
-        ) {
+        var flags = SelfProtectionDetector.updateFlagsFromText(node.text, currentFlags)
+        flags = SelfProtectionDetector.updateFlagsFromText(node.contentDescription, flags)
+        if (SelfProtectionDetector.canShortCircuit(flags, antiUninstallEnabled, isActivating)) {
             return flags
         }
 
@@ -480,49 +312,12 @@ class CurbstompService : BaseBlockingService() {
             val child = node.getChild(i) ?: continue
             try {
                 flags = scanNodeTree(child, flags, antiUninstallEnabled, isActivating)
-                if ((flags and FLAG_APP_NAME) != 0 && (flags and FLAG_ACCESSIBILITY) != 0) {
+                if (SelfProtectionDetector.canShortCircuit(flags, antiUninstallEnabled, isActivating)) {
                     return flags
                 }
             } finally {
                 safeRecycle(child)
             }
-        }
-        return flags
-    }
-
-    private fun updateFlagsFromText(cs: CharSequence?, initialFlags: Int): Int {
-        if (cs.isNullOrEmpty()) return initialFlags
-        var flags = initialFlags
-        if ((flags and FLAG_APP_NAME) == 0 && cs.contains("curbstomp", ignoreCase = true)) {
-            flags = flags or FLAG_APP_NAME
-        }
-        if ((flags and FLAG_DEVICE_ADMIN) == 0 &&
-            (cs.contains("device admin", ignoreCase = true) ||
-                cs.contains("device administrator", ignoreCase = true) ||
-                cs.contains("active admin", ignoreCase = true))
-        ) {
-            flags = flags or FLAG_DEVICE_ADMIN
-        }
-        if ((flags and FLAG_DEACTIVATE) == 0 &&
-            (cs.contains("deactivate", ignoreCase = true) ||
-                cs.contains("de-activate", ignoreCase = true))
-        ) {
-            flags = flags or FLAG_DEACTIVATE
-        }
-        if ((flags and FLAG_UNINSTALL) == 0 &&
-            (cs.contains("force stop", ignoreCase = true) ||
-                cs.contains("kill", ignoreCase = true) ||
-                cs.contains("clear data", ignoreCase = true) ||
-                cs.contains("uninstall", ignoreCase = true))
-        ) {
-            flags = flags or FLAG_UNINSTALL
-        }
-        if ((flags and FLAG_ACCESSIBILITY) == 0 &&
-            (cs.contains("curbstomp needs access", ignoreCase = true) ||
-                cs.contains("stop curbstomp", ignoreCase = true) ||
-                cs.contains("turn off curbstomp", ignoreCase = true))
-        ) {
-            flags = flags or FLAG_ACCESSIBILITY
         }
         return flags
     }
@@ -534,36 +329,30 @@ class CurbstompService : BaseBlockingService() {
         }
     }
 
-    override fun onInterrupt() {
-    }
-
     override fun onDestroy() {
         if (receiverRegistered) {
             try {
                 unregisterReceiver(systemStateReceiver)
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+            }
             receiverRegistered = false
         }
         nextCheckJob?.cancel()
         nextCheckJob = null
 
         val pkg = activePackage
-        val start = sessionStartElapsedMs
-        sessionStartElapsedMs = 0L
-        if (pkg != null && start > 0L && !isCriticalSystemApp(pkg)) {
-            val elapsed = (SystemClock.elapsedRealtime() - start).coerceAtLeast(0L)
-            if (elapsed > 0L) {
-                val snapshot = currentSettings
-                val now = System.currentTimeMillis()
-                CoroutineScope(Dispatchers.IO).launch {
-                    val result = RuleEngine.evaluatePackage(
-                        settings = snapshot,
-                        packageName = pkg,
-                        nowMillis = now,
-                        addUsageMillis = elapsed
-                    )
-                    result.updatedUsageMap?.let { dataStoreManager.updateAppUsageMillis(it) }
-                }
+        val elapsed = consumeElapsedSessionMs()
+        if (pkg != null && elapsed > 0L && !packageResolver.isCriticalSystemApp(pkg)) {
+            val snapshot = currentSettings
+            val now = System.currentTimeMillis()
+            CoroutineScope(Dispatchers.IO).launch {
+                val result = RuleEngine.evaluatePackage(
+                    settings = snapshot,
+                    packageName = pkg,
+                    nowMillis = now,
+                    addUsageMillis = elapsed
+                )
+                result.updatedUsageMap?.let { settingsRepository.updateAppUsageMillis(it) }
             }
         }
 

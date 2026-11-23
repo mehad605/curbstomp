@@ -1,25 +1,17 @@
-package com.mhm.curbstomp.utils
+package com.mhm.curbstomp.data.local
 
-import android.content.Context
-import android.util.AtomicFile
 import com.mhm.curbstomp.data.models.AppLimit
 import com.mhm.curbstomp.data.models.InstantFocus
 import com.mhm.curbstomp.data.models.Rule
 import com.mhm.curbstomp.data.models.Settings
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.emitAll
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.File
-import java.io.FileNotFoundException
 import java.util.UUID
 
+/**
+ * Zero-dependency JSON serializer/deserializer for [Settings] backed by Android's `org.json`.
+ * Preserves full schema compatibility with existing `datastore/settings.json` files.
+ */
 object SettingsJson {
 
     fun toJson(settings: Settings): String {
@@ -182,128 +174,5 @@ object SettingsJson {
             }
         }
         return result
-    }
-}
-
-private class SettingsStore(private val file: File) {
-    private val atomicFile = AtomicFile(file)
-    private val mutex = Mutex()
-    private val state = MutableStateFlow(Settings())
-
-    @Volatile
-    private var loaded = false
-
-    val data: Flow<Settings> = flow {
-        ensureLoaded()
-        emitAll(state)
-    }
-
-    private suspend fun ensureLoaded() {
-        if (loaded) return
-        mutex.withLock {
-            ensureLoadedLocked()
-        }
-    }
-
-    private suspend fun ensureLoadedLocked() {
-        if (loaded) return
-        val diskSettings = withContext(Dispatchers.IO) {
-            try {
-                val bytes = atomicFile.readFully()
-                SettingsJson.fromJson(bytes.toString(Charsets.UTF_8))
-            } catch (_: FileNotFoundException) {
-                Settings()
-            } catch (_: Exception) {
-                Settings()
-            }
-        }
-        state.value = diskSettings
-        loaded = true
-    }
-
-    suspend fun updateData(transform: (Settings) -> Settings): Settings {
-        return mutex.withLock {
-            ensureLoadedLocked()
-            val current = state.value
-            val updated = transform(current)
-            if (updated == current) return@withLock current
-
-            withContext(Dispatchers.IO) {
-                file.parentFile?.mkdirs()
-                val stream = atomicFile.startWrite()
-                try {
-                    stream.write(SettingsJson.toJson(updated).toByteArray(Charsets.UTF_8))
-                    atomicFile.finishWrite(stream)
-                } catch (e: Exception) {
-                    atomicFile.failWrite(stream)
-                    throw e
-                }
-            }
-            state.value = updated
-            updated
-        }
-    }
-}
-
-class DataStoreManager(context: Context) {
-
-    private val appContext = context.applicationContext
-
-    companion object {
-        @Volatile
-        private var storeInstance: SettingsStore? = null
-
-        private fun getStore(context: Context): SettingsStore {
-            return storeInstance ?: synchronized(this) {
-                storeInstance ?: SettingsStore(
-                    File(context.applicationContext.filesDir, "datastore/settings.json")
-                ).also { storeInstance = it }
-            }
-        }
-    }
-
-    private val store = getStore(appContext)
-
-    val settings: Flow<Settings> = store.data
-
-    suspend fun update(transform: (Settings) -> Settings): Settings {
-        return store.updateData(transform)
-    }
-
-    suspend fun updateSettings(newSettings: Settings) {
-        store.updateData { newSettings }
-    }
-
-    suspend fun updateRules(rules: List<Rule>) {
-        val (todayKey, yesterdayKey) = RuleEngine.dateKeysFor(System.currentTimeMillis())
-        store.updateData { current ->
-            val prunedUsage = RuleEngine.pruneStaleUsage(
-                current.appUsageMillis,
-                rules,
-                todayKey,
-                yesterdayKey
-            )
-            current.copy(rules = rules, appUsageMillis = prunedUsage)
-        }
-    }
-
-    suspend fun updateInstantFocusSessions(sessions: List<InstantFocus>) {
-        store.updateData { it.copy(instantFocusSessions = sessions) }
-    }
-
-    suspend fun updatePasswordHash(hash: String?) {
-        store.updateData { it.copy(passwordHash = hash) }
-    }
-
-    suspend fun updateAntiUninstallEnabled(enabled: Boolean) {
-        store.updateData { it.copy(antiUninstallEnabled = enabled) }
-    }
-
-    suspend fun updateDeviceAdminActivationRequestedAt(timestamp: Long) {
-        store.updateData { it.copy(deviceAdminActivationRequestedAt = timestamp) }
-    }
-
-    suspend fun updateAppUsageMillis(usageMap: Map<String, Long>) {
-        store.updateData { it.copy(appUsageMillis = usageMap) }
     }
 }

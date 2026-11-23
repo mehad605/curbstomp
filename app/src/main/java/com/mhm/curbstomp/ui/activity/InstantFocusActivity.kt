@@ -1,76 +1,81 @@
 package com.mhm.curbstomp.ui.activity
 
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.graphics.drawable.Drawable
 import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
-import com.google.android.material.bottomsheet.BottomSheetDialog
+import com.mhm.curbstomp.appContainer
 import com.mhm.curbstomp.data.models.AppLimit
 import com.mhm.curbstomp.data.models.InstantFocus
 import com.mhm.curbstomp.databinding.ActivityInstantFocusBinding
-import com.mhm.curbstomp.databinding.DialogTimePickerBinding
-import com.mhm.curbstomp.databinding.ItemAppLimitBinding
-import com.mhm.curbstomp.utils.DataStoreManager
-import com.mhm.curbstomp.utils.PasswordDialog
+import com.mhm.curbstomp.domain.StrictModePolicy
+import com.mhm.curbstomp.ui.adapter.AppLimitAdapter
+import com.mhm.curbstomp.ui.common.PasswordDialog
+import com.mhm.curbstomp.ui.common.TimeDialogs
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.Dispatchers
 import java.util.UUID
 
 class InstantFocusActivity : AppCompatActivity() {
 
-    private lateinit var binding: ActivityInstantFocusBinding
-    private lateinit var dataStoreManager: DataStoreManager
-    private lateinit var appLimitAdapter: AppLimitAdapter
-    
-    private val selectedAppsMap = linkedMapOf<String, Long>()
-    private val appIconCache = android.util.LruCache<String, Drawable>(48)
-    private val appLabelCache = mutableMapOf<String, String>()
+    companion object {
+        const val EXTRA_EDIT_FOCUS_ID = "EDIT_FOCUS_ID"
+        const val EXTRA_PREFILL_DURATION_MINS = "PREFILL_DURATION_MINS"
+        private const val STATE_DURATION_MINS = "state_duration_mins"
+        private const val STATE_IS_WHITELIST = "state_is_whitelist"
+        private const val STATE_SELECTED_APPS = "state_selected_apps"
+    }
 
-    private var durationMins = 0L
-    private var isWhitelist = true
+    private lateinit var binding: ActivityInstantFocusBinding
+    private lateinit var appLimitAdapter: AppLimitAdapter
+
+    private val selectedPackages = linkedSetOf<String>()
+    private var durationMins: Long = 0L
+    private var isWhitelist: Boolean = true
     private var editingFocusId: String? = null
 
-    private val selectAppsLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == RESULT_OK) {
-            val apps = result.data?.getStringArrayListExtra("SELECTED_APPS") ?: return@registerForActivityResult
-            val newMap = linkedMapOf<String, Long>()
-            for (app in apps) {
-                newMap[app] = selectedAppsMap[app] ?: 0L
+    private val selectAppsLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == RESULT_OK) {
+                val apps = result.data?.getStringArrayListExtra(SelectAppsActivity.EXTRA_SELECTED_APPS)
+                    ?: return@registerForActivityResult
+                selectedPackages.clear()
+                selectedPackages.addAll(apps)
+                refreshAppsList()
             }
-            selectedAppsMap.clear()
-            selectedAppsMap.putAll(newMap)
-            appLimitAdapter.submitPackages(selectedAppsMap.keys.toList())
         }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityInstantFocusBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        dataStoreManager = DataStoreManager(this)
+        editingFocusId = intent.getStringExtra(EXTRA_EDIT_FOCUS_ID)
 
         binding.toolbar.setNavigationOnClickListener { finish() }
 
-        appLimitAdapter = AppLimitAdapter()
+        appLimitAdapter = AppLimitAdapter(
+            scope = lifecycleScope,
+            iconLoader = appContainer.appIconLoader,
+            showLimits = false,
+            onRemove = { packageName ->
+                selectedPackages.remove(packageName)
+                refreshAppsList()
+            }
+        )
         binding.rvSelectedApps.layoutManager = LinearLayoutManager(this)
         binding.rvSelectedApps.adapter = appLimitAdapter
 
         binding.btnAddApps.setOnClickListener {
             val intent = Intent(this, SelectAppsActivity::class.java).apply {
-                putStringArrayListExtra("PRE_SELECTED_APPS", ArrayList(selectedAppsMap.keys))
+                putStringArrayListExtra(
+                    SelectAppsActivity.EXTRA_PRE_SELECTED_APPS,
+                    ArrayList(selectedPackages)
+                )
             }
             selectAppsLauncher.launch(intent)
         }
@@ -83,247 +88,130 @@ class InstantFocusActivity : AppCompatActivity() {
             showModeSelectionDialog()
         }
 
-        editingFocusId = intent.getStringExtra("EDIT_FOCUS_ID")
-        val prefillMins = intent.getLongExtra("PREFILL_DURATION_MINS", 0L)
-        
         if (editingFocusId != null) {
             binding.toolbar.title = "Edit Focus"
             binding.btnStart.text = "SAVE FOCUS"
-            loadExistingFocus(editingFocusId!!)
-        } else if (prefillMins > 0) {
-            updateDurationDisplay(prefillMins)
-        } else {
-            // Default 0 for Custom. Open duration picker automatically.
-            updateDurationDisplay(0)
-            showDurationPicker()
         }
+
+        if (savedInstanceState != null) {
+            durationMins = savedInstanceState.getLong(STATE_DURATION_MINS, 0L)
+            isWhitelist = savedInstanceState.getBoolean(STATE_IS_WHITELIST, true)
+            selectedPackages.clear()
+            selectedPackages.addAll(savedInstanceState.getStringArrayList(STATE_SELECTED_APPS).orEmpty())
+            updateDurationDisplay(durationMins)
+            refreshAppsList()
+        } else {
+            val prefillMins = intent.getLongExtra(EXTRA_PREFILL_DURATION_MINS, 0L)
+            when {
+                editingFocusId != null -> loadExistingFocus(editingFocusId!!)
+                prefillMins > 0L -> updateDurationDisplay(prefillMins)
+                else -> {
+                    updateDurationDisplay(0L)
+                    showDurationPicker()
+                }
+            }
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putLong(STATE_DURATION_MINS, durationMins)
+        outState.putBoolean(STATE_IS_WHITELIST, isWhitelist)
+        outState.putStringArrayList(STATE_SELECTED_APPS, ArrayList(selectedPackages))
+    }
+
+    private fun refreshAppsList() {
+        appLimitAdapter.submitList(selectedPackages.map { AppLimit(it, 0L) })
     }
 
     private fun updateDurationDisplay(mins: Long) {
         durationMins = mins
-        val h = mins / 60
-        val m = mins % 60
-        binding.tvDurationDisplay.text = if (h > 0) "${h}h ${m}m" else "${m}m"
+        val h = mins / 60L
+        val m = mins % 60L
+        binding.tvDurationDisplay.text = if (h > 0L) "${h}h ${m}m" else "${m}m"
     }
 
     private fun showDurationPicker() {
-        val pickerBinding = DialogTimePickerBinding.inflate(layoutInflater)
-        val dialog = BottomSheetDialog(this)
-        dialog.setContentView(pickerBinding.root)
-        
-        // Hide fully block button since it makes no sense here
-        pickerBinding.btnFullyBlock.visibility = View.GONE
-
-        pickerBinding.npHours.minValue = 0
-        pickerBinding.npHours.maxValue = 23
-        pickerBinding.npHours.value = (durationMins / 60).toInt()
-
-        pickerBinding.npMinutes.minValue = 0
-        pickerBinding.npMinutes.maxValue = 59
-        pickerBinding.npMinutes.value = (durationMins % 60).toInt()
-
-        pickerBinding.btnSaveLimit.setOnClickListener {
-            val totalMins = (pickerBinding.npHours.value * 60) + pickerBinding.npMinutes.value
-            updateDurationDisplay(totalMins.toLong())
-            dialog.dismiss()
+        TimeDialogs.showDurationOrLimitPicker(
+            context = this,
+            initialMinutes = durationMins,
+            showFullyBlock = false
+        ) { totalMins ->
+            updateDurationDisplay(totalMins)
         }
-
-        dialog.show()
     }
 
     private fun showModeSelectionDialog() {
-        if (durationMins <= 0) {
+        if (durationMins <= 0L) {
             Toast.makeText(this, "Please set a valid duration", Toast.LENGTH_SHORT).show()
             return
         }
-
-        if (selectedAppsMap.isEmpty()) {
+        if (selectedPackages.isEmpty()) {
             Toast.makeText(this, "Select at least one app", Toast.LENGTH_SHORT).show()
             return
         }
 
         val options = arrayOf("Allow Only These", "Block These")
-        androidx.appcompat.app.AlertDialog.Builder(this)
+        AlertDialog.Builder(this)
             .setTitle("What should happen to these apps?")
             .setItems(options) { _, which ->
                 isWhitelist = (which == 0)
-                startFocus()
+                saveFocusSession()
             }
             .show()
     }
 
     private fun loadExistingFocus(focusId: String) {
         lifecycleScope.launch {
-            val sessions = dataStoreManager.settings.first().instantFocusSessions
-            val focus = sessions.find { it.id == focusId } ?: return@launch
-            
-            withContext(Dispatchers.Main) {
-                updateDurationDisplay((focus.endTimeMillis - focus.startTimeMillis) / 60000)
-                isWhitelist = focus.isWhitelist
-                
-                selectedAppsMap.clear()
-                for (limit in focus.appLimits) {
-                    selectedAppsMap[limit.packageName] = 0L // Ignore old limits
-                }
-                appLimitAdapter.submitPackages(selectedAppsMap.keys.toList())
+            val focus = appContainer.settingsRepository.settings.first().instantFocusSessions
+                .find { it.id == focusId } ?: return@launch
+
+            updateDurationDisplay((focus.endTimeMillis - focus.startTimeMillis) / 60_000L)
+            isWhitelist = focus.isWhitelist
+            selectedPackages.clear()
+            for (limit in focus.appLimits) {
+                selectedPackages.add(limit.packageName)
             }
+            refreshAppsList()
         }
     }
 
-    private fun startFocus() {
-
-        val appLimits = selectedAppsMap.map { AppLimit(it.key, 0L) }
-
-        val startTime = System.currentTimeMillis()
-        val endTime = startTime + (durationMins * 60000)
-
-        val focus = InstantFocus(
+    private fun saveFocusSession() {
+        val now = System.currentTimeMillis()
+        val newFocus = InstantFocus(
             id = editingFocusId ?: UUID.randomUUID().toString(),
-            startTimeMillis = startTime,
-            endTimeMillis = endTime,
-            appLimits = appLimits,
+            startTimeMillis = now,
+            endTimeMillis = now + (durationMins * 60_000L),
+            appLimits = selectedPackages.map { AppLimit(it, 0L) },
             isActive = true,
             isWhitelist = isWhitelist
         )
 
+        val repo = appContainer.settingsRepository
         lifecycleScope.launch {
-            val currentSessions = dataStoreManager.settings.first().instantFocusSessions.toMutableList()
-            var requiresPassword = false
-            
-            if (editingFocusId != null) {
-                val index = currentSessions.indexOfFirst { it.id == editingFocusId }
-                if (index != -1) {
-                    val oldSession = currentSessions[index]
-                    if (oldSession.isActive) {
-                        val oldDurationMins = (oldSession.endTimeMillis - oldSession.startTimeMillis) / 60000
-                        if (durationMins < oldDurationMins) {
-                            requiresPassword = true // Cheating by making focus session shorter
-                        }
-                        if (oldSession.isWhitelist != isWhitelist) {
-                            requiresPassword = true // Changing mode might be cheating
-                        } else {
-                            val oldApps = oldSession.appLimits.map { it.packageName }.toSet()
-                            val newApps = selectedAppsMap.keys
-                            val addedApps = newApps.filter { it !in oldApps }
-                            val removedApps = oldApps.filter { it !in newApps }
-
-                            if (isWhitelist) {
-                                // Allow list mode: adding apps to allowed list is less strict -> password needed
-                                if (addedApps.isNotEmpty()) {
-                                    requiresPassword = true
-                                }
-                            } else {
-                                // Block list mode: removing apps from blocked list is less strict -> password needed
-                                if (removedApps.isNotEmpty()) {
-                                    requiresPassword = true
-                                }
-                            }
-                        }
-                    }
-                }
+            val oldFocus = editingFocusId?.let { id ->
+                repo.settings.first().instantFocusSessions.find { it.id == id }
             }
+            val requiresPassword = oldFocus != null && StrictModePolicy.requiresPasswordForFocusEdit(
+                oldFocus = oldFocus,
+                newDurationMins = durationMins,
+                newIsWhitelist = isWhitelist,
+                newPackages = selectedPackages
+            )
 
-            val doSave = {
+            val persist: () -> Unit = {
                 lifecycleScope.launch {
-                    val updatedSessions = dataStoreManager.settings.first().instantFocusSessions.toMutableList()
-                    if (editingFocusId != null) {
-                        val index = updatedSessions.indexOfFirst { it.id == editingFocusId }
-                        if (index != -1) {
-                            updatedSessions[index] = focus
-                        } else {
-                            updatedSessions.add(focus)
-                        }
-                    } else {
-                        updatedSessions.add(focus)
-                    }
-                    dataStoreManager.updateInstantFocusSessions(updatedSessions)
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(this@InstantFocusActivity, "Instant Focus Saved", Toast.LENGTH_SHORT).show()
-                        finish()
-                    }
+                    repo.upsertInstantFocus(newFocus)
+                    Toast.makeText(this@InstantFocusActivity, "Instant Focus Saved", Toast.LENGTH_SHORT).show()
+                    finish()
                 }
             }
 
-            withContext(Dispatchers.Main) {
-                if (requiresPassword) {
-                    PasswordDialog.verifyPassword(this@InstantFocusActivity, dataStoreManager) { doSave() }
-                } else {
-                    doSave()
-                }
+            if (requiresPassword) {
+                PasswordDialog.verifyPassword(this@InstantFocusActivity, repo) { persist() }
+            } else {
+                persist()
             }
         }
-    }
-
-    override fun onDestroy() {
-        appIconCache.evictAll()
-        appLabelCache.clear()
-        super.onDestroy()
-    }
-
-    private fun getAppInfo(packageName: String): Pair<String, Drawable?> {
-        val cachedLabel = appLabelCache[packageName]
-        val cachedIcon = appIconCache.get(packageName)
-        if (cachedLabel != null && cachedIcon != null) {
-            return Pair(cachedLabel, cachedIcon)
-        }
-        return try {
-            val pm = packageManager
-            val info = pm.getApplicationInfo(packageName, 0)
-            val label = pm.getApplicationLabel(info).toString()
-            val icon = pm.getApplicationIcon(info)
-            appLabelCache[packageName] = label
-            appIconCache.put(packageName, icon)
-            Pair(label, icon)
-        } catch (_: PackageManager.NameNotFoundException) {
-            Pair(packageName, null)
-        }
-    }
-
-    inner class AppLimitAdapter : RecyclerView.Adapter<AppLimitAdapter.ViewHolder>() {
-
-        private var items: List<String> = emptyList()
-
-        fun submitPackages(newItems: List<String>) {
-            val oldItems = items
-            val diff = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
-                override fun getOldListSize(): Int = oldItems.size
-                override fun getNewListSize(): Int = newItems.size
-                override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean =
-                    oldItems[oldItemPosition] == newItems[newItemPosition]
-                override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean =
-                    oldItems[oldItemPosition] == newItems[newItemPosition]
-            })
-            items = newItems
-            diff.dispatchUpdatesTo(this)
-        }
-
-        inner class ViewHolder(val binding: ItemAppLimitBinding) : RecyclerView.ViewHolder(binding.root)
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-            val binding = ItemAppLimitBinding.inflate(LayoutInflater.from(parent.context), parent, false)
-            return ViewHolder(binding)
-        }
-
-        override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-            val packageName = items[position]
-
-            val (label, icon) = getAppInfo(packageName)
-            holder.binding.tvAppName.text = label
-            holder.binding.ivAppIcon.setImageDrawable(icon)
-
-            holder.binding.tvAppLimit.visibility = View.GONE
-            holder.binding.btnSetLimit.visibility = View.GONE
-
-            holder.binding.btnRemove.setOnClickListener {
-                val pos = holder.adapterPosition
-                if (pos != RecyclerView.NO_POSITION) {
-                    selectedAppsMap.remove(packageName)
-                    items = items.toMutableList().apply { removeAt(pos) }
-                    notifyItemRemoved(pos)
-                }
-            }
-        }
-
-        override fun getItemCount(): Int = items.size
     }
 }

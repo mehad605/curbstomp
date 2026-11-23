@@ -1,4 +1,4 @@
-package com.mhm.curbstomp.utils
+package com.mhm.curbstomp.data.local
 
 import com.mhm.curbstomp.data.models.AppLimit
 import com.mhm.curbstomp.data.models.InstantFocus
@@ -52,7 +52,7 @@ class SettingsJsonTest {
                     remainingMillis = 1_200_000L
                 )
             ),
-            passwordHash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            passwordHash = "pbkdf2_sha256\$100000\$00112233445566778899aabbccddeeff\$deadbeef",
             antiUninstallEnabled = true,
             extraHardenEnabled = true,
             deviceAdminActivationRequestedAt = 1_700_000_123_456L,

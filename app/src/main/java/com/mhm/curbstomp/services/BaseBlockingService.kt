@@ -3,45 +3,29 @@ package com.mhm.curbstomp.services
 import android.accessibilityservice.AccessibilityService
 import android.os.SystemClock
 import android.view.accessibility.AccessibilityEvent
-import com.mhm.curbstomp.utils.DataStoreManager
-import kotlin.lazy
+import com.mhm.curbstomp.appContainer
+import com.mhm.curbstomp.data.repository.SettingsRepository
 
 open class BaseBlockingService : AccessibilityService() {
 
-    val dataStoreManager  by lazy {
-        DataStoreManager(this)
+    protected val settingsRepository: SettingsRepository by lazy {
+        appContainer.settingsRepository
     }
 
-
-    var lastBackPressTimeStamp: Long =
-        SystemClock.uptimeMillis() // prevents repetitive global actions
-
-    override fun onServiceConnected() {
-        super.onServiceConnected()
-    }
+    private var lastActionTimeStamp: Long = 0L
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
     }
 
     override fun onInterrupt() {
     }
 
-
-    fun isDelayOver(lastTimestamp: Long, delay: Long): Boolean {
-        return SystemClock.uptimeMillis() - lastTimestamp > delay
+    protected fun isCooldownElapsed(cooldownMs: Long): Boolean {
+        return SystemClock.uptimeMillis() - lastActionTimeStamp > cooldownMs
     }
 
-    fun pressHome() {
+    protected fun pressHome() {
         performGlobalAction(GLOBAL_ACTION_HOME)
-        lastBackPressTimeStamp = SystemClock.uptimeMillis()
-    }
-
-    fun pressBack() {
-        performGlobalAction(GLOBAL_ACTION_BACK)
-        lastBackPressTimeStamp = SystemClock.uptimeMillis()
+        lastActionTimeStamp = SystemClock.uptimeMillis()
     }
 }

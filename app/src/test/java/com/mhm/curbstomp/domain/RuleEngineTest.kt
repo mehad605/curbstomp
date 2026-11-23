@@ -1,4 +1,4 @@
-package com.mhm.curbstomp.utils
+package com.mhm.curbstomp.domain
 
 import com.mhm.curbstomp.data.models.AppLimit
 import com.mhm.curbstomp.data.models.InstantFocus
@@ -38,11 +38,24 @@ class RuleEngineTest {
     }
 
     @Test
+    fun formatTime12HourAndWindowDurationHandleAllEdgeCases() {
+        assertEquals("12:00 AM", RuleEngine.formatTime12Hour("00:00"))
+        assertEquals("12:00 PM", RuleEngine.formatTime12Hour("12:00"))
+        assertEquals("09:05 AM", RuleEngine.formatTime12Hour("09:05"))
+        assertEquals("11:59 PM", RuleEngine.formatTime12Hour("23:59"))
+        assertEquals("invalid", RuleEngine.formatTime12Hour("invalid"))
+
+        assertEquals(8 * 60, RuleEngine.windowDurationMinutes("09:00", "17:00"))
+        assertEquals(8 * 60, RuleEngine.windowDurationMinutes("22:00", "06:00"))
+        assertEquals(24 * 60, RuleEngine.windowDurationMinutes("00:00", "00:00"))
+        assertNull(RuleEngine.windowDurationMinutes("bad", "17:00"))
+    }
+
+    @Test
     fun nonLatinDefaultLocaleStillProducesAsciiKeysAndEvaluatesRules() {
         val original = Locale.getDefault()
         try {
             Locale.setDefault(Locale("ar", "EG"))
-            // 2026-03-16 is Monday
             val now = utcMillis(2026, 3, 16, 10, 15)
             val (today, yesterday) = RuleEngine.dateKeysFor(now, utc)
             assertEquals("20260316", today)
@@ -77,7 +90,7 @@ class RuleEngineTest {
         val pausedFocus = InstantFocus(
             id = "f-paused",
             startTimeMillis = now - 600_000L,
-            endTimeMillis = now - 60_000L, // wall-clock passed endTime while paused
+            endTimeMillis = now - 60_000L,
             appLimits = listOf(AppLimit("com.example.yt", 0L)),
             isActive = true,
             isWhitelist = false,
@@ -99,7 +112,6 @@ class RuleEngineTest {
         assertEquals(1, pruned.size)
         assertEquals("f-paused", pruned[0].id)
 
-        // Paused session must NOT block even if within start..end
         val pausedInWindow = pausedFocus.copy(endTimeMillis = now + 300_000L)
         val eval = RuleEngine.evaluatePackage(
             settings = Settings(instantFocusSessions = listOf(pausedInWindow)),
@@ -131,6 +143,19 @@ class RuleEngineTest {
     }
 
     @Test
+    fun extraHardenBlocksAndroidSettingsImmediately() {
+        val now = utcMillis(2026, 3, 16, 12, 0)
+        val res = RuleEngine.evaluatePackage(
+            settings = Settings(extraHardenEnabled = true),
+            packageName = "com.android.settings",
+            nowMillis = now,
+            timeZone = utc
+        )
+        assertTrue(res.blocked)
+        assertEquals("Extra Harden: Settings Blocked!", res.blockReason)
+    }
+
+    @Test
     fun crossMidnightRuleChecksPrevDayAndUsesYesterdayUsageKey() {
         val rule = Rule(
             id = "night",
@@ -142,7 +167,6 @@ class RuleEngineTest {
             isWhitelist = false,
             isActive = true
         )
-        // Monday 23:00 -> active with Monday's date key 20260316
         val mondayNight = utcMillis(2026, 3, 16, 23, 0)
         val res1 = RuleEngine.evaluatePackage(
             settings = Settings(rules = listOf(rule)),
@@ -155,7 +179,6 @@ class RuleEngineTest {
         assertEquals(30_000L, res1.updatedUsageMap?.get("night_20260316_com.example.game"))
         assertEquals(30_000L, res1.nextWakeDelayMillis)
 
-        // Tuesday 02:00 -> still active because Monday (prevDay) is in daysOfWeek; shares 20260316 key!
         val tuesdayEarly = utcMillis(2026, 3, 17, 2, 0)
         val res2 = RuleEngine.evaluatePackage(
             settings = Settings(rules = listOf(rule), appUsageMillis = res1.updatedUsageMap!!),
@@ -168,7 +191,6 @@ class RuleEngineTest {
         assertEquals("Rule Sleep: App Blocked!", res2.blockReason)
         assertEquals(60_000L, res2.updatedUsageMap?.get("night_20260316_com.example.game"))
 
-        // Tuesday 23:00 -> NOT active because Tuesday is not in daysOfWeek
         val tuesdayNight = utcMillis(2026, 3, 17, 23, 0)
         val res3 = RuleEngine.evaluatePackage(
             settings = Settings(rules = listOf(rule)),
@@ -217,7 +239,6 @@ class RuleEngineTest {
         assertFalse(affected.blocked)
         assertEquals(30 * 60_000L, affected.nextWakeDelayMillis)
 
-        // Unrelated app should have NO scheduled wakeup at all!
         val unaffected = RuleEngine.evaluatePackage(settings, "com.example.calculator", monday830, timeZone = utc)
         assertFalse(unaffected.blocked)
         assertNull(unaffected.nextWakeDelayMillis)
@@ -234,11 +255,11 @@ class RuleEngineTest {
             appLimits = emptyList()
         )
         val usage = mapOf(
-            "r1_20260316_com.a" to 1000L,       // today -> keep
-            "r1_20260315_com.a" to 2000L,       // yesterday -> keep
-            "r1_20260314_com.a" to 3000L,       // 2 days ago -> prune
-            "deleted_20260316_com.a" to 4000L,  // deleted rule -> prune
-            "r1_20260316_com.foo_bar" to 5000L  // pkg with underscore -> keep
+            "r1_20260316_com.a" to 1000L,
+            "r1_20260315_com.a" to 2000L,
+            "r1_20260314_com.a" to 3000L,
+            "deleted_20260316_com.a" to 4000L,
+            "r1_20260316_com.foo_bar" to 5000L
         )
         val pruned = RuleEngine.pruneStaleUsage(usage, listOf(rule), "20260316", "20260315")
         assertEquals(3, pruned.size)
@@ -246,7 +267,6 @@ class RuleEngineTest {
         assertEquals(2000L, pruned["r1_20260315_com.a"])
         assertEquals(5000L, pruned["r1_20260316_com.foo_bar"])
 
-        // When nothing is stale, returns exact same map reference
         val secondPass = RuleEngine.pruneStaleUsage(pruned, listOf(rule), "20260316", "20260315")
         assertSame(pruned, secondPass)
     }

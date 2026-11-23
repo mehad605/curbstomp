@@ -1,14 +1,15 @@
-package com.mhm.curbstomp.utils
+package com.mhm.curbstomp.domain
 
 import com.mhm.curbstomp.data.models.InstantFocus
 import com.mhm.curbstomp.data.models.Rule
 import com.mhm.curbstomp.data.models.Settings
 import java.util.Calendar
+import java.util.Locale
 import java.util.TimeZone
 
 /**
  * Pure, locale-independent schedule, focus, and usage evaluation engine.
- * Shared by CurbstompService and MainActivity so enforcement and UI never diverge.
+ * Shared by [com.mhm.curbstomp.services.CurbstompService] and UI screens so enforcement and display never diverge.
  */
 object RuleEngine {
 
@@ -27,6 +28,34 @@ object RuleEngine {
         val minute = parseAsciiInt(timeStr, colon + 1, timeStr.length) ?: return null
         if (hour !in 0..23 || minute !in 0..59) return null
         return hour * 60 + minute
+    }
+
+    /**
+     * Formats a 24-hour `"HH:mm"` string as 12-hour ASCII `"hh:mm AM/PM"`.
+     */
+    fun formatTime12Hour(time24: String): String {
+        val totalMin = parseTimeToMinutes(time24) ?: return time24
+        val hour24 = totalMin / 60
+        val minute = totalMin % 60
+        val amPm = if (hour24 >= 12) "PM" else "AM"
+        val hour12 = when (val h = hour24 % 12) {
+            0 -> 12
+            else -> h
+        }
+        return String.format(Locale.US, "%02d:%02d %s", hour12, minute, amPm)
+    }
+
+    /**
+     * Computes window length in minutes, handling overnight spans (e.g., 23:00 -> 06:00).
+     */
+    fun windowDurationMinutes(startTime: String, endTime: String): Int? {
+        val start = parseTimeToMinutes(startTime) ?: return null
+        val end = parseTimeToMinutes(endTime) ?: return null
+        return when {
+            start == end -> 24 * 60
+            end > start -> end - start
+            else -> (end + 24 * 60) - start
+        }
     }
 
     private fun parseAsciiInt(s: String, start: Int, end: Int): Int? {
@@ -118,7 +147,7 @@ object RuleEngine {
     }
 
     /**
-     * Returns the YYYYMMDD date key to use when reading today's/current-window usage stats for [rule].
+     * Returns the YYYYMMDD date key to use when reading current-window usage stats for [rule].
      */
     fun statsDateKeyForRule(
         rule: Rule,
@@ -335,7 +364,6 @@ object RuleEngine {
                     minNextWake = minDelay(minNextWake, ruleEndDelay)
                 }
             } else {
-                // Rule is not active right now; if it affects this package, wake at its next start time
                 val affectsPackage = rule.isWhitelist || appLimit != null
                 if (affectsPackage && rule.daysOfWeek.isNotEmpty()) {
                     val nextStartDelay = millisUntilNextRuleStart(rule, cal, nowMillis)
@@ -395,7 +423,6 @@ object RuleEngine {
         candidate.set(Calendar.MILLISECOND, 0)
 
         if (startMin == endMin) {
-            // 24h rule ends at next midnight (where day might change / reset usage key)
             candidate.add(Calendar.DAY_OF_YEAR, 1)
             candidate.set(Calendar.HOUR_OF_DAY, 0)
             candidate.set(Calendar.MINUTE, 0)
@@ -404,10 +431,8 @@ object RuleEngine {
         }
 
         val currentMin = nowCal.get(Calendar.HOUR_OF_DAY) * 60 + nowCal.get(Calendar.MINUTE)
-        // Rule is active inclusively through endMin, so it ends at endMin + 1 minute
         val endExclusiveMin = endMin + 1
         if (startMin > endMin && currentMin >= startMin) {
-            // Started today, ends tomorrow at endExclusiveMin
             candidate.add(Calendar.DAY_OF_YEAR, 1)
         }
         if (endExclusiveMin >= 1440) {

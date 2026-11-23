@@ -1,110 +1,159 @@
 package com.mhm.curbstomp.ui.activity
 
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.graphics.drawable.Drawable
 import android.os.Bundle
-import android.util.LruCache
-import android.view.LayoutInflater
-import android.view.ViewGroup
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
+import com.mhm.curbstomp.appContainer
 import com.mhm.curbstomp.data.models.AppLimit
 import com.mhm.curbstomp.data.models.Rule
 import com.mhm.curbstomp.databinding.ActivityCreateRuleBinding
-import com.mhm.curbstomp.databinding.DialogTimePickerBinding
-import com.mhm.curbstomp.databinding.DialogTimeSelectionBinding
-import com.mhm.curbstomp.databinding.ItemAppLimitBinding
-import com.mhm.curbstomp.utils.DataStoreManager
-import com.mhm.curbstomp.utils.RuleEngine
+import com.mhm.curbstomp.domain.RuleEngine
+import com.mhm.curbstomp.domain.StrictModePolicy
+import com.mhm.curbstomp.ui.adapter.AppLimitAdapter
+import com.mhm.curbstomp.ui.common.PasswordDialog
+import com.mhm.curbstomp.ui.common.TimeDialogs
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.Calendar
-import java.util.Locale
 import java.util.UUID
 
 class CreateRuleActivity : AppCompatActivity() {
 
-    private lateinit var binding: ActivityCreateRuleBinding
-    private lateinit var dataStoreManager: DataStoreManager
-    private lateinit var appLimitAdapter: AppLimitAdapter
-
-    private var startTimeStr = "00:00"
-    private var endTimeStr = "23:59"
-    private val selectedAppsMap = linkedMapOf<String, Long>()
-
-    private val appIconCache = LruCache<String, Drawable>(48)
-    private val appLabelCache = mutableMapOf<String, String>()
-
-    private val selectAppsLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == RESULT_OK) {
-            val apps = result.data?.getStringArrayListExtra("SELECTED_APPS") ?: return@registerForActivityResult
-            val newMap = linkedMapOf<String, Long>()
-            for (app in apps) {
-                newMap[app] = selectedAppsMap[app] ?: 0L
-            }
-            selectedAppsMap.clear()
-            selectedAppsMap.putAll(newMap)
-            appLimitAdapter.submitEntries(selectedAppsMap.entries.map { it.key to it.value })
-        }
+    companion object {
+        const val EXTRA_EDIT_RULE_ID = "EDIT_RULE_ID"
+        private const val STATE_START_TIME = "state_start_time"
+        private const val STATE_END_TIME = "state_end_time"
+        private const val STATE_IS_WHITELIST = "state_is_whitelist"
+        private const val STATE_APP_PACKAGES = "state_app_packages"
+        private const val STATE_APP_LIMITS = "state_app_limits"
     }
 
+    private lateinit var binding: ActivityCreateRuleBinding
+    private lateinit var appLimitAdapter: AppLimitAdapter
+
     private var editingRuleId: String? = null
+    private var startTimeStr: String = "00:00"
+    private var endTimeStr: String = "23:59"
     private var isWhitelist: Boolean = false
+    private val selectedAppsMap = linkedMapOf<String, Long>()
+
+    private val selectAppsLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == RESULT_OK) {
+                val apps = result.data?.getStringArrayListExtra(SelectAppsActivity.EXTRA_SELECTED_APPS)
+                    ?: return@registerForActivityResult
+                val updated = linkedMapOf<String, Long>()
+                for (app in apps) {
+                    updated[app] = selectedAppsMap[app] ?: 0L
+                }
+                selectedAppsMap.clear()
+                selectedAppsMap.putAll(updated)
+                refreshAppsList()
+            }
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityCreateRuleBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        dataStoreManager = DataStoreManager(this)
+        editingRuleId = intent.getStringExtra(EXTRA_EDIT_RULE_ID)
+
+        if (savedInstanceState != null) {
+            restoreState(savedInstanceState)
+        }
 
         binding.toolbar.setNavigationOnClickListener { finish() }
+        if (editingRuleId != null) {
+            binding.toolbar.title = "Edit Rule"
+        }
 
-        binding.btnStartTime.text = "Start: ${formatTime12Hour(startTimeStr)}"
-        binding.btnEndTime.text = "End: ${formatTime12Hour(endTimeStr)}"
+        appLimitAdapter = AppLimitAdapter(
+            scope = lifecycleScope,
+            iconLoader = appContainer.appIconLoader,
+            showLimits = true,
+            onRemove = { packageName ->
+                selectedAppsMap.remove(packageName)
+                refreshAppsList()
+            },
+            onSetLimitClick = { packageName, currentLimitMillis ->
+                TimeDialogs.showDurationOrLimitPicker(
+                    context = this,
+                    initialMinutes = currentLimitMillis / 60_000L,
+                    showFullyBlock = true
+                ) { totalMinutes ->
+                    selectedAppsMap[packageName] = totalMinutes * 60_000L
+                    refreshAppsList()
+                }
+            }
+        )
+        binding.rvSelectedApps.layoutManager = LinearLayoutManager(this)
+        binding.rvSelectedApps.adapter = appLimitAdapter
 
+        setupListeners()
+        syncFormUi()
+
+        if (savedInstanceState == null && editingRuleId != null) {
+            loadExistingRule(editingRuleId!!)
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString(STATE_START_TIME, startTimeStr)
+        outState.putString(STATE_END_TIME, endTimeStr)
+        outState.putBoolean(STATE_IS_WHITELIST, isWhitelist)
+        outState.putStringArrayList(STATE_APP_PACKAGES, ArrayList(selectedAppsMap.keys))
+        outState.putLongArray(STATE_APP_LIMITS, selectedAppsMap.values.toLongArray())
+    }
+
+    private fun restoreState(state: Bundle) {
+        startTimeStr = state.getString(STATE_START_TIME, "00:00")
+        endTimeStr = state.getString(STATE_END_TIME, "23:59")
+        isWhitelist = state.getBoolean(STATE_IS_WHITELIST, false)
+        val packages = state.getStringArrayList(STATE_APP_PACKAGES).orEmpty()
+        val limits = state.getLongArray(STATE_APP_LIMITS) ?: LongArray(0)
+        selectedAppsMap.clear()
+        for (i in packages.indices) {
+            selectedAppsMap[packages[i]] = limits.getOrElse(i) { 0L }
+        }
+    }
+
+    private fun setupListeners() {
         binding.btnStartTime.setOnClickListener {
-            showTimePicker(startTimeStr) { time ->
+            TimeDialogs.showClockPicker(this, startTimeStr) { time ->
                 startTimeStr = time
-                binding.btnStartTime.text = "Start: ${formatTime12Hour(startTimeStr)}"
+                syncTimeButtons()
             }
         }
 
         binding.btnEndTime.setOnClickListener {
-            showTimePicker(endTimeStr) { time ->
+            TimeDialogs.showClockPicker(this, endTimeStr) { time ->
                 endTimeStr = time
-                binding.btnEndTime.text = "End: ${formatTime12Hour(endTimeStr)}"
+                syncTimeButtons()
             }
         }
-        
-        binding.rbBlockThese.isChecked = !isWhitelist
-        binding.rbAllowOnly.isChecked = isWhitelist
-        
+
         binding.cardAllowOnly.setOnClickListener {
             isWhitelist = true
-            binding.rbAllowOnly.isChecked = true
-            binding.rbBlockThese.isChecked = false
-        }
-        
-        binding.cardBlockThese.setOnClickListener {
-            isWhitelist = false
-            binding.rbAllowOnly.isChecked = false
-            binding.rbBlockThese.isChecked = true
+            syncModeRadios()
         }
 
-        appLimitAdapter = AppLimitAdapter()
-        binding.rvSelectedApps.layoutManager = LinearLayoutManager(this)
-        binding.rvSelectedApps.adapter = appLimitAdapter
+        binding.cardBlockThese.setOnClickListener {
+            isWhitelist = false
+            syncModeRadios()
+        }
 
         binding.btnAddApps.setOnClickListener {
             val intent = Intent(this, SelectAppsActivity::class.java).apply {
-                putStringArrayListExtra("PRE_SELECTED_APPS", ArrayList(selectedAppsMap.keys))
+                putStringArrayListExtra(
+                    SelectAppsActivity.EXTRA_PRE_SELECTED_APPS,
+                    ArrayList(selectedAppsMap.keys)
+                )
             }
             selectAppsLauncher.launch(intent)
         }
@@ -112,104 +161,52 @@ class CreateRuleActivity : AppCompatActivity() {
         binding.btnSave.setOnClickListener {
             saveRule()
         }
+    }
 
-        editingRuleId = intent.getStringExtra("EDIT_RULE_ID")
-        if (editingRuleId != null) {
-            binding.toolbar.title = "Edit Rule"
-            loadExistingRule(editingRuleId!!)
-        }
+    private fun syncFormUi() {
+        syncTimeButtons()
+        syncModeRadios()
+        refreshAppsList()
+    }
+
+    private fun syncTimeButtons() {
+        binding.btnStartTime.text = "Start: ${RuleEngine.formatTime12Hour(startTimeStr)}"
+        binding.btnEndTime.text = "End: ${RuleEngine.formatTime12Hour(endTimeStr)}"
+    }
+
+    private fun syncModeRadios() {
+        binding.rbAllowOnly.isChecked = isWhitelist
+        binding.rbBlockThese.isChecked = !isWhitelist
+    }
+
+    private fun refreshAppsList() {
+        appLimitAdapter.submitList(selectedAppsMap.map { AppLimit(it.key, it.value) })
     }
 
     private fun loadExistingRule(ruleId: String) {
         lifecycleScope.launch {
-            val rules = dataStoreManager.settings.first().rules
-            val rule = rules.find { it.id == ruleId } ?: return@launch
-            
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                binding.etRuleName.setText(rule.name)
-                startTimeStr = rule.startTime
-                endTimeStr = rule.endTime
-                binding.btnStartTime.text = "Start: ${formatTime12Hour(startTimeStr)}"
-                binding.btnEndTime.text = "End: ${formatTime12Hour(endTimeStr)}"
-                
-                isWhitelist = rule.isWhitelist
-                binding.rbAllowOnly.isChecked = isWhitelist
-                binding.rbBlockThese.isChecked = !isWhitelist
-                
-                binding.chipSun.isChecked = rule.daysOfWeek.contains(Calendar.SUNDAY)
-                binding.chipMon.isChecked = rule.daysOfWeek.contains(Calendar.MONDAY)
-                binding.chipTue.isChecked = rule.daysOfWeek.contains(Calendar.TUESDAY)
-                binding.chipWed.isChecked = rule.daysOfWeek.contains(Calendar.WEDNESDAY)
-                binding.chipThu.isChecked = rule.daysOfWeek.contains(Calendar.THURSDAY)
-                binding.chipFri.isChecked = rule.daysOfWeek.contains(Calendar.FRIDAY)
-                binding.chipSat.isChecked = rule.daysOfWeek.contains(Calendar.SATURDAY)
-                
-                selectedAppsMap.clear()
-                for (limit in rule.appLimits) {
-                    selectedAppsMap[limit.packageName] = limit.maxUsageMillis
-                }
-                appLimitAdapter.submitEntries(selectedAppsMap.entries.map { it.key to it.value })
+            val rule = appContainer.settingsRepository.settings.first().rules
+                .find { it.id == ruleId } ?: return@launch
+
+            binding.etRuleName.setText(rule.name)
+            startTimeStr = rule.startTime
+            endTimeStr = rule.endTime
+            isWhitelist = rule.isWhitelist
+
+            binding.chipSun.isChecked = rule.daysOfWeek.contains(Calendar.SUNDAY)
+            binding.chipMon.isChecked = rule.daysOfWeek.contains(Calendar.MONDAY)
+            binding.chipTue.isChecked = rule.daysOfWeek.contains(Calendar.TUESDAY)
+            binding.chipWed.isChecked = rule.daysOfWeek.contains(Calendar.WEDNESDAY)
+            binding.chipThu.isChecked = rule.daysOfWeek.contains(Calendar.THURSDAY)
+            binding.chipFri.isChecked = rule.daysOfWeek.contains(Calendar.FRIDAY)
+            binding.chipSat.isChecked = rule.daysOfWeek.contains(Calendar.SATURDAY)
+
+            selectedAppsMap.clear()
+            for (limit in rule.appLimits) {
+                selectedAppsMap[limit.packageName] = limit.maxUsageMillis
             }
+            syncFormUi()
         }
-    }
-
-    private fun showTimePicker(currentTime: String, onTimeSet: (String) -> Unit) {
-        val parts = currentTime.split(":")
-        val h = parts.getOrNull(0)?.toIntOrNull() ?: 0
-        val m = parts.getOrNull(1)?.toIntOrNull() ?: 0
-
-        val dialog = com.google.android.material.bottomsheet.BottomSheetDialog(this)
-        val timeBinding = DialogTimeSelectionBinding.inflate(layoutInflater)
-        dialog.setContentView(timeBinding.root)
-
-        timeBinding.npHours.minValue = 1
-        timeBinding.npHours.maxValue = 12
-        
-        timeBinding.npMinutes.minValue = 0
-        timeBinding.npMinutes.maxValue = 59
-        timeBinding.npMinutes.setFormatter { String.format(Locale.US, "%02d", it) }
-
-        timeBinding.npAmPm.minValue = 0
-        timeBinding.npAmPm.maxValue = 1
-        timeBinding.npAmPm.displayedValues = arrayOf("AM", "PM")
-
-        // Parse 24hr to 12hr for picker initialization
-        val isPm = h >= 12
-        timeBinding.npAmPm.value = if (isPm) 1 else 0
-
-        var displayHour = h % 12
-        if (displayHour == 0) displayHour = 12
-        timeBinding.npHours.value = displayHour
-
-        timeBinding.npMinutes.value = m
-
-        timeBinding.btnSaveTime.setOnClickListener {
-            val selectedIsPm = timeBinding.npAmPm.value == 1
-            var selectedHour = timeBinding.npHours.value
-            if (selectedIsPm && selectedHour != 12) {
-                selectedHour += 12
-            } else if (!selectedIsPm && selectedHour == 12) {
-                selectedHour = 0
-            }
-
-            val formattedTime = String.format(Locale.US, "%02d:%02d", selectedHour, timeBinding.npMinutes.value)
-            onTimeSet(formattedTime)
-            dialog.dismiss()
-        }
-
-        dialog.show()
-    }
-
-    private fun formatTime12Hour(time24: String): String {
-        val totalMin = RuleEngine.parseTimeToMinutes(time24) ?: return time24
-        val hour24 = totalMin / 60
-        val minute = totalMin % 60
-        val amPm = if (hour24 >= 12) "PM" else "AM"
-        val hour12 = when (val h = hour24 % 12) {
-            0 -> 12
-            else -> h
-        }
-        return String.format(Locale.US, "%02d:%02d %s", hour12, minute, amPm)
     }
 
     private fun getSelectedDays(): List<Int> {
@@ -225,7 +222,7 @@ class CreateRuleActivity : AppCompatActivity() {
     }
 
     private fun saveRule() {
-        val name = binding.etRuleName.text.toString()
+        val name = binding.etRuleName.text?.toString().orEmpty()
         if (name.isEmpty()) {
             binding.etRuleName.error = "Name required"
             return
@@ -237,220 +234,38 @@ class CreateRuleActivity : AppCompatActivity() {
             return
         }
 
-        val appLimits = selectedAppsMap.map { AppLimit(it.key, it.value) }
-
-        val rule = Rule(
+        val newRule = Rule(
             id = editingRuleId ?: UUID.randomUUID().toString(),
             name = name,
             startTime = startTimeStr,
             endTime = endTimeStr,
             daysOfWeek = days,
-            appLimits = appLimits,
+            appLimits = selectedAppsMap.map { AppLimit(it.key, it.value) },
             isWhitelist = isWhitelist,
             isActive = true
         )
 
+        val repo = appContainer.settingsRepository
         lifecycleScope.launch {
-            val currentRules = dataStoreManager.settings.first().rules.toMutableList()
-            var requiresPassword = false
-            
-            if (editingRuleId != null) {
-                val index = currentRules.indexOfFirst { it.id == editingRuleId }
-                if (index != -1) {
-                    val oldRule = currentRules[index]
-                    if (oldRule.isActive) {
-                        if (oldRule.isWhitelist != rule.isWhitelist) {
-                            requiresPassword = true // changing protocol requires password
-                        } else {
-                            // Check if overall rule duration decreased
-                            fun getMins(timeStr: String): Int {
-                                val p = timeStr.split(":")
-                                return p[0].toInt() * 60 + p[1].toInt()
-                            }
-                            fun getDur(start: String, end: String): Int {
-                                val s = getMins(start)
-                                val e = getMins(end)
-                                return if (e >= s) e - s else (e + 24 * 60) - s
-                            }
-                            val oldDur = getDur(oldRule.startTime, oldRule.endTime)
-                            val newDur = getDur(rule.startTime, rule.endTime)
-                            if (newDur < oldDur) {
-                                requiresPassword = true // Rule window shortened (less strict)
-                            }
-    
-                            if (rule.isWhitelist) {
-                                // Whitelist: Adding an app makes it less strict. Removing makes it more strict.
-                                for (newLimit in appLimits) {
-                                    val oldLimit = oldRule.appLimits.find { it.packageName == newLimit.packageName }
-                                    if (oldLimit == null) {
-                                        requiresPassword = true // App added to whitelist (allowed)
-                                        break
-                                    } else if (newLimit.maxUsageMillis > oldLimit.maxUsageMillis) {
-                                        requiresPassword = true // Time limit increased
-                                        break
-                                    }
-                                }
-                            } else {
-                                // Blacklist: Removing an app makes it less strict. Adding makes it more strict.
-                                for (oldLimit in oldRule.appLimits) {
-                                    val newLimit = selectedAppsMap[oldLimit.packageName]
-                                    if (newLimit == null) {
-                                        requiresPassword = true // App removed from blacklist (allowed)
-                                        break
-                                    } else if (newLimit > oldLimit.maxUsageMillis) {
-                                        requiresPassword = true // Time limit increased
-                                        break
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+            val oldRule = editingRuleId?.let { id ->
+                repo.settings.first().rules.find { it.id == id }
             }
+            val requiresPassword = oldRule != null &&
+                StrictModePolicy.requiresPasswordForRuleEdit(oldRule, newRule)
 
-            val doSave = {
+            val persist: () -> Unit = {
                 lifecycleScope.launch {
-                    val updatedRules = dataStoreManager.settings.first().rules.toMutableList()
-                    if (editingRuleId != null) {
-                        val index = updatedRules.indexOfFirst { it.id == editingRuleId }
-                        if (index != -1) {
-                            updatedRules[index] = rule
-                        } else {
-                            updatedRules.add(rule)
-                        }
-                    } else {
-                        updatedRules.add(rule)
-                    }
-                    dataStoreManager.updateRules(updatedRules)
-                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                        Toast.makeText(this@CreateRuleActivity, "Rule Saved", Toast.LENGTH_SHORT).show()
-                        finish()
-                    }
+                    repo.upsertRule(newRule)
+                    Toast.makeText(this@CreateRuleActivity, "Rule Saved", Toast.LENGTH_SHORT).show()
+                    finish()
                 }
             }
 
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                if (requiresPassword) {
-                    com.mhm.curbstomp.utils.PasswordDialog.verifyPassword(this@CreateRuleActivity, dataStoreManager) { doSave() }
-                } else {
-                    doSave()
-                }
-            }
-        }
-    }
-
-    override fun onDestroy() {
-        appIconCache.evictAll()
-        appLabelCache.clear()
-        super.onDestroy()
-    }
-
-    private fun getAppInfo(packageName: String): Pair<String, Drawable?> {
-        val cachedLabel = appLabelCache[packageName]
-        val cachedIcon = appIconCache.get(packageName)
-        if (cachedLabel != null && cachedIcon != null) {
-            return Pair(cachedLabel, cachedIcon)
-        }
-        return try {
-            val pm = packageManager
-            val info = pm.getApplicationInfo(packageName, 0)
-            val label = pm.getApplicationLabel(info).toString()
-            val icon = pm.getApplicationIcon(info)
-            appLabelCache[packageName] = label
-            appIconCache.put(packageName, icon)
-            Pair(label, icon)
-        } catch (_: PackageManager.NameNotFoundException) {
-            Pair(packageName, null)
-        }
-    }
-
-    inner class AppLimitAdapter : RecyclerView.Adapter<AppLimitAdapter.ViewHolder>() {
-
-        private var items: List<Pair<String, Long>> = emptyList()
-
-        fun submitEntries(newItems: List<Pair<String, Long>>) {
-            val oldItems = items
-            val diff = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
-                override fun getOldListSize(): Int = oldItems.size
-                override fun getNewListSize(): Int = newItems.size
-                override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean =
-                    oldItems[oldItemPosition].first == newItems[newItemPosition].first
-                override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean =
-                    oldItems[oldItemPosition] == newItems[newItemPosition]
-            })
-            items = newItems
-            diff.dispatchUpdatesTo(this)
-        }
-
-        inner class ViewHolder(val binding: ItemAppLimitBinding) : RecyclerView.ViewHolder(binding.root)
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-            val binding = ItemAppLimitBinding.inflate(LayoutInflater.from(parent.context), parent, false)
-            return ViewHolder(binding)
-        }
-
-        override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-            val (packageName, limitMillis) = items[position]
-            val limitMinutes = limitMillis / 60000
-
-            val (label, icon) = getAppInfo(packageName)
-            holder.binding.tvAppName.text = label
-            holder.binding.ivAppIcon.setImageDrawable(icon)
-
-            if (limitMinutes == 0L) {
-                holder.binding.tvAppLimit.text = "Blocked (0 min)"
+            if (requiresPassword) {
+                PasswordDialog.verifyPassword(this@CreateRuleActivity, repo) { persist() }
             } else {
-                holder.binding.tvAppLimit.text = "Limit: $limitMinutes min"
-            }
-
-            holder.binding.btnRemove.setOnClickListener {
-                val pos = holder.adapterPosition
-                if (pos != RecyclerView.NO_POSITION) {
-                    selectedAppsMap.remove(packageName)
-                    items = items.toMutableList().apply { removeAt(pos) }
-                    notifyItemRemoved(pos)
-                }
-            }
-
-            holder.binding.btnSetLimit.setOnClickListener {
-                val pickerBinding = DialogTimePickerBinding.inflate(layoutInflater)
-                val dialog = com.google.android.material.bottomsheet.BottomSheetDialog(this@CreateRuleActivity)
-                dialog.setContentView(pickerBinding.root)
-
-                pickerBinding.npHours.minValue = 0
-                pickerBinding.npHours.maxValue = 23
-                pickerBinding.npHours.value = (limitMinutes / 60).toInt()
-
-                pickerBinding.npMinutes.minValue = 0
-                pickerBinding.npMinutes.maxValue = 59
-                pickerBinding.npMinutes.value = (limitMinutes % 60).toInt()
-
-                pickerBinding.btnFullyBlock.setOnClickListener {
-                    selectedAppsMap[packageName] = 0L
-                    val pos = holder.adapterPosition
-                    if (pos != RecyclerView.NO_POSITION) {
-                        items = items.toMutableList().apply { this[pos] = packageName to 0L }
-                        notifyItemChanged(pos)
-                    }
-                    dialog.dismiss()
-                }
-
-                pickerBinding.btnSaveLimit.setOnClickListener {
-                    val totalMins = (pickerBinding.npHours.value * 60) + pickerBinding.npMinutes.value
-                    val newMillis = totalMins * 60000L
-                    selectedAppsMap[packageName] = newMillis
-                    val pos = holder.adapterPosition
-                    if (pos != RecyclerView.NO_POSITION) {
-                        items = items.toMutableList().apply { this[pos] = packageName to newMillis }
-                        notifyItemChanged(pos)
-                    }
-                    dialog.dismiss()
-                }
-
-                dialog.show()
+                persist()
             }
         }
-
-        override fun getItemCount(): Int = items.size
     }
 }
