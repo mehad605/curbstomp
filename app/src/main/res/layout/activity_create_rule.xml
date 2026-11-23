@@ -12,7 +12,7 @@
         android:layout_height="?attr/actionBarSize"
         android:background="?attr/colorSurface"
         android:elevation="0dp"
-        app:title="CREATE RULE"
+        app:title="@string/title_create_rule"
         app:titleTextAppearance="@style/TextAppearance.AppCompat.Medium"
         app:navigationIcon="?attr/homeAsUpIndicator"
         app:titleTextColor="?attr/colorPrimary" />
@@ -42,17 +42,17 @@
                 app:boxStrokeWidth="0dp"
                 app:boxStrokeWidthFocused="0dp"
                 android:layout_marginBottom="24dp">
-                
+
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/etRuleName"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:hint="Rule Name (e.g. Work Hours)"
+                    android:hint="@string/hint_rule_name"
                     android:fontFamily="@font/inter"
                     android:textColor="?attr/colorPrimary"
                     android:background="@android:color/transparent"
                     android:inputType="textCapWords" />
-                
+
                 <View
                     android:layout_width="match_parent"
                     android:layout_height="1dp"
@@ -78,7 +78,7 @@
                     app:strokeWidth="1dp"
                     android:textColor="?attr/colorPrimary"
                     android:fontFamily="@font/inter"
-                    android:text="START: 09:00" />
+                    tools:text="Start: 09:00 AM" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnEndTime"
@@ -92,19 +92,19 @@
                     app:strokeWidth="1dp"
                     android:textColor="?attr/colorPrimary"
                     android:fontFamily="@font/inter"
-                    android:text="END: 17:00" />
+                    tools:text="End: 05:00 PM" />
             </LinearLayout>
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="REPEATING DAYS"
+                android:text="@string/label_repeating_days"
                 android:fontFamily="@font/inter"
                 android:textSize="11sp"
                 android:textStyle="bold"
                 android:letterSpacing="0.08"
                 android:textColor="?attr/colorOnSurfaceVariant"
-                android:layout_marginBottom="16dp"/>
+                android:layout_marginBottom="16dp" />
 
             <LinearLayout
                 android:id="@+id/chipGroupDays"
@@ -113,7 +113,7 @@
                 android:orientation="horizontal"
                 android:layout_marginBottom="24dp"
                 android:weightSum="7">
-                
+
                 <com.google.android.material.chip.Chip
                     android:id="@+id/chipSun"
                     style="@style/Widget.Material3.Chip.Filter"
@@ -135,7 +135,8 @@
                     app:chipEndPadding="0dp"
                     app:textStartPadding="0dp"
                     app:textEndPadding="0dp"
-                    android:text="S" />
+                    android:text="@string/day_sun_short" />
+
                 <com.google.android.material.chip.Chip
                     android:id="@+id/chipMon"
                     style="@style/Widget.Material3.Chip.Filter"
@@ -157,7 +158,8 @@
                     app:chipEndPadding="0dp"
                     app:textStartPadding="0dp"
                     app:textEndPadding="0dp"
-                    android:text="M" />
+                    android:text="@string/day_mon_short" />
+
                 <com.google.android.material.chip.Chip
                     android:id="@+id/chipTue"
                     style="@style/Widget.Material3.Chip.Filter"
@@ -179,7 +181,8 @@
                     app:chipEndPadding="0dp"
                     app:textStartPadding="0dp"
                     app:textEndPadding="0dp"
-                    android:text="T" />
+                    android:text="@string/day_tue_short" />
+
                 <com.google.android.material.chip.Chip
                     android:id="@+id/chipWed"
                     style="@style/Widget.Material3.Chip.Filter"
@@ -201,7 +204,8 @@
                     app:chipEndPadding="0dp"
                     app:textStartPadding="0dp"
                     app:textEndPadding="0dp"
-                    android:text="W" />
+                    android:text="@string/day_wed_short" />
+
                 <com.google.android.material.chip.Chip
                     android:id="@+id/chipThu"
                     style="@style/Widget.Material3.Chip.Filter"
@@ -223,7 +227,8 @@
                     app:chipEndPadding="0dp"
                     app:textStartPadding="0dp"
                     app:textEndPadding="0dp"
-                    android:text="T" />
+                    android:text="@string/day_thu_short" />
+
                 <com.google.android.material.chip.Chip
                     android:id="@+id/chipFri"
                     style="@style/Widget.Material3.Chip.Filter"
@@ -245,7 +250,8 @@
                     app:chipEndPadding="0dp"
                     app:textStartPadding="0dp"
                     app:textEndPadding="0dp"
-                    android:text="F" />
+                    android:text="@string/day_fri_short" />
+
                 <com.google.android.material.chip.Chip
                     android:id="@+id/chipSat"
                     style="@style/Widget.Material3.Chip.Filter"
@@ -266,25 +272,25 @@
                     app:chipEndPadding="0dp"
                     app:textStartPadding="0dp"
                     app:textEndPadding="0dp"
-                    android:text="S" />
+                    android:text="@string/day_sat_short" />
             </LinearLayout>
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="ENFORCEMENT PROTOCOL"
+                android:text="@string/label_enforcement_protocol"
                 android:fontFamily="@font/inter"
                 android:textSize="11sp"
                 android:textStyle="bold"
                 android:letterSpacing="0.08"
                 android:textColor="?attr/colorOnSurfaceVariant"
-                android:layout_marginBottom="8dp"/>
-                
+                android:layout_marginBottom="8dp" />
+
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
                 android:background="?attr/colorOutlineVariant"
-                android:layout_marginBottom="16dp"/>
+                android:layout_marginBottom="16dp" />
 
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/cardAllowOnly"
@@ -302,37 +308,38 @@
                     android:orientation="horizontal"
                     android:padding="16dp"
                     android:gravity="center_vertical">
-                    
+
                     <ImageView
                         android:layout_width="24dp"
                         android:layout_height="24dp"
                         app:tint="#4CAF50"
                         android:src="@drawable/ic_check_circle"
+                        android:importantForAccessibility="no"
                         android:layout_marginEnd="16dp" />
-                        
+
                     <LinearLayout
                         android:layout_width="0dp"
                         android:layout_weight="1"
                         android:layout_height="wrap_content"
                         android:orientation="vertical">
-                        
+
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Allow Only These"
+                            android:text="@string/protocol_allow_only_title"
                             android:textStyle="bold"
                             android:textColor="?attr/colorOnSurface"
                             android:textSize="14sp" />
-                            
+
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Block everything else. Maximum restriction."
+                            android:text="@string/protocol_allow_only_desc"
                             android:textColor="?attr/colorOnSurfaceVariant"
                             android:textSize="12sp"
                             android:layout_marginTop="2dp" />
                     </LinearLayout>
-                    
+
                     <RadioButton
                         android:id="@+id/rbAllowOnly"
                         android:layout_width="wrap_content"
@@ -359,37 +366,38 @@
                     android:orientation="horizontal"
                     android:padding="16dp"
                     android:gravity="center_vertical">
-                    
+
                     <ImageView
                         android:layout_width="24dp"
                         android:layout_height="24dp"
                         app:tint="#FF5722"
                         android:src="@drawable/ic_block_aesthetic"
+                        android:importantForAccessibility="no"
                         android:layout_marginEnd="16dp" />
-                        
+
                     <LinearLayout
                         android:layout_width="0dp"
                         android:layout_weight="1"
                         android:layout_height="wrap_content"
                         android:orientation="vertical">
-                        
+
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Block These"
+                            android:text="@string/protocol_block_these_title"
                             android:textStyle="bold"
                             android:textColor="?attr/colorOnSurface"
                             android:textSize="14sp" />
-                            
+
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Blacklist specific applications only."
+                            android:text="@string/protocol_block_these_desc"
                             android:textColor="?attr/colorOnSurfaceVariant"
                             android:textSize="12sp"
                             android:layout_marginTop="2dp" />
                     </LinearLayout>
-                    
+
                     <RadioButton
                         android:id="@+id/rbBlockThese"
                         android:layout_width="wrap_content"
@@ -411,13 +419,13 @@
                     android:layout_width="0dp"
                     android:layout_weight="1"
                     android:layout_height="wrap_content"
-                    android:text="SELECTED APPS"
+                    android:text="@string/label_selected_apps"
                     android:fontFamily="@font/inter"
                     android:textSize="11sp"
                     android:textStyle="bold"
                     android:letterSpacing="0.08"
-                    android:textColor="?attr/colorOnSurfaceVariant"/>
-                    
+                    android:textColor="?attr/colorOnSurfaceVariant" />
+
                 <Button
                     android:id="@+id/btnAddApps"
                     style="@style/Widget.Material3.Button.TextButton"
@@ -426,21 +434,21 @@
                     android:textColor="?attr/colorPrimary"
                     app:cornerRadius="0dp"
                     android:fontFamily="@font/inter"
-                    android:text="ADD APPS" />
+                    android:text="@string/action_add_apps" />
             </LinearLayout>
-            
+
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
                 android:background="?attr/colorOutlineVariant"
-                android:layout_marginBottom="8dp"/>
+                android:layout_marginBottom="8dp" />
 
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/rvSelectedApps"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:nestedScrollingEnabled="false"
-                tools:listitem="@layout/item_app_limit"/>
+                tools:listitem="@layout/item_app_limit" />
 
         </LinearLayout>
     </ScrollView>
@@ -462,7 +470,7 @@
             android:id="@+id/btnSave"
             android:layout_width="match_parent"
             android:layout_height="56dp"
-            android:text="SAVE RULE"
+            android:text="@string/action_save_rule"
             android:fontFamily="@font/inter"
             android:textSize="14sp"
             android:letterSpacing="0.08"

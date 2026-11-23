@@ -165,11 +165,11 @@ class MainActivity : AppCompatActivity() {
 
         val listItems = ArrayList<RuleListItem>(settings.rules.size + 2)
         if (activeRules.isNotEmpty()) {
-            listItems.add(RuleListItem.Header("Active"))
+            listItems.add(RuleListItem.Header(getString(R.string.rules_header_active)))
             for (rule in activeRules) listItems.add(RuleListItem.RuleItem(rule))
         }
         if (inactiveRules.isNotEmpty()) {
-            listItems.add(RuleListItem.Header("Inactive"))
+            listItems.add(RuleListItem.Header(getString(R.string.rules_header_inactive)))
             for (rule in inactiveRules) listItems.add(RuleListItem.RuleItem(rule))
         }
 
@@ -181,8 +181,13 @@ class MainActivity : AppCompatActivity() {
             yesterdayKey = yesterdayKey
         )
 
-        binding.btnSetPassword.text =
-            if (!settings.passwordHash.isNullOrEmpty()) "UPDATE PASSWORD" else "SET PASSWORD"
+        binding.btnSetPassword.setText(
+            if (!settings.passwordHash.isNullOrEmpty()) {
+                R.string.action_update_password
+            } else {
+                R.string.action_set_password
+            }
+        )
 
         updateActiveFocusUI(activeFocus)
     }
@@ -229,8 +234,9 @@ class MainActivity : AppCompatActivity() {
         binding.llActiveFocus.visibility = View.VISIBLE
         binding.llQuickStart.visibility = View.GONE
 
-        binding.tvActiveFocusMode.text =
-            if (focus.isWhitelist) "ONLY THESE APPS ALLOWED" else "THESE APPS BLOCKED"
+        binding.tvActiveFocusMode.setText(
+            if (focus.isWhitelist) R.string.focus_mode_allowed_only else R.string.focus_mode_blocked
+        )
         binding.tvActiveFocusMode.setTextColor(
             if (focus.isWhitelist) {
                 getColor(android.R.color.holo_green_dark)
@@ -244,7 +250,9 @@ class MainActivity : AppCompatActivity() {
         }
 
         val repo = appContainer.settingsRepository
-        binding.btnPauseResumeFocus.text = if (focus.isPaused) "RESUME" else "PAUSE"
+        binding.btnPauseResumeFocus.setText(
+            if (focus.isPaused) R.string.action_resume else R.string.action_pause
+        )
 
         binding.btnPauseResumeFocus.setOnClickListener {
             lifecycleScope.launch {
@@ -272,7 +280,7 @@ class MainActivity : AppCompatActivity() {
                     SelectAppsActivity.EXTRA_PRE_SELECTED_APPS,
                     ArrayList(focus.appLimits.map { it.packageName })
                 )
-                putExtra(SelectAppsActivity.EXTRA_TITLE, "Edit Focus Apps")
+                putExtra(SelectAppsActivity.EXTRA_TITLE, getString(R.string.title_edit_focus_apps))
             }
             editFocusAppsLauncher.launch(intent)
         }
@@ -299,7 +307,7 @@ class MainActivity : AppCompatActivity() {
         }
         if (focus.appLimits.size > 8) {
             val tv = TextView(this).apply {
-                text = "+${focus.appLimits.size - 8}"
+                text = getString(R.string.focus_extra_apps_count, focus.appLimits.size - 8)
                 setTextColor(getColor(android.R.color.black))
                 textSize = 14f
             }
@@ -345,19 +353,19 @@ class MainActivity : AppCompatActivity() {
         binding.rowDeviceAdmin.setOnClickListener {
             if (!binding.switchDeviceAdmin.isChecked) {
                 AlertDialog.Builder(this)
-                    .setTitle("Enable Uninstall Invincibility?")
-                    .setMessage("This will prevent the app from being uninstalled or force-closed. You will need to use your Curbstomp password to disable this feature later. Are you absolutely sure?")
-                    .setPositiveButton("I UNDERSTAND & ENABLE") { _, _ ->
+                    .setTitle(R.string.dialog_enable_admin_title)
+                    .setMessage(R.string.dialog_enable_admin_message)
+                    .setPositiveButton(R.string.action_understand_and_enable) { _, _ ->
                         lifecycleScope.launch {
                             repo.markDeviceAdminActivationRequested()
                             PermissionUtils.requestDeviceAdmin(
                                 context = this@MainActivity,
                                 adminClass = CurbstompDeviceAdminReceiver::class.java,
-                                explanation = "Required to prevent the app from being uninstalled or force-stopped."
+                                explanation = getString(R.string.admin_permission_explanation)
                             )
                         }
                     }
-                    .setNegativeButton("CANCEL", null)
+                    .setNegativeButton(R.string.action_cancel, null)
                     .show()
             } else {
                 lifecycleScope.launch {
@@ -375,15 +383,15 @@ class MainActivity : AppCompatActivity() {
         binding.llExtraHarden.setOnClickListener {
             if (!binding.switchExtraHarden.isChecked) {
                 AlertDialog.Builder(this)
-                    .setTitle("Enable Extra Harden?")
-                    .setMessage("This will make it VERY difficult to uninstall the app and you will be completely unable to open the Settings app. You may need to use adb commands to disable this if you forget your password or get locked out. Are you absolutely sure?")
-                    .setPositiveButton("I UNDERSTAND & ENABLE") { _, _ ->
+                    .setTitle(R.string.dialog_enable_extra_harden_title)
+                    .setMessage(R.string.dialog_enable_extra_harden_message)
+                    .setPositiveButton(R.string.action_understand_and_enable) { _, _ ->
                         lifecycleScope.launch {
                             repo.setExtraHardenEnabled(true)
                             binding.switchExtraHarden.isChecked = true
                         }
                     }
-                    .setNegativeButton("CANCEL", null)
+                    .setNegativeButton(R.string.action_cancel, null)
                     .show()
             } else {
                 lifecycleScope.launch {
@@ -428,9 +436,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showAddFocusTimeDialog(focus: InstantFocus) {
-        val options = arrayOf("+10 Minutes", "+30 Minutes", "+1 Hour", "+2 Hours", "Custom...")
+        val options = arrayOf(
+            getString(R.string.option_plus_10_min),
+            getString(R.string.option_plus_30_min),
+            getString(R.string.option_plus_1_hour),
+            getString(R.string.option_plus_2_hours),
+            getString(R.string.option_custom)
+        )
         AlertDialog.Builder(this)
-            .setTitle("Add Time to Focus")
+            .setTitle(R.string.dialog_add_focus_time_title)
             .setItems(options) { _, which ->
                 when (which) {
                     0 -> addFocusTime(focus, 10L)
@@ -440,8 +454,8 @@ class MainActivity : AppCompatActivity() {
                     4 -> TimeDialogs.showDurationOrLimitPicker(
                         context = this,
                         initialMinutes = 15L,
-                        title = "ADD TIME",
-                        confirmLabel = "ADD TIME",
+                        title = getString(R.string.action_add_time),
+                        confirmLabel = getString(R.string.action_add_time),
                         showFullyBlock = false
                     ) { totalMins ->
                         if (totalMins > 0L) addFocusTime(focus, totalMins)
@@ -456,7 +470,7 @@ class MainActivity : AppCompatActivity() {
             appContainer.settingsRepository.addInstantFocusTime(focus.id, minutes)
             Toast.makeText(
                 this@MainActivity,
-                "Added $minutes minutes to focus session",
+                resources.getQuantityString(R.plurals.toast_added_focus_time, minutes.toInt(), minutes),
                 Toast.LENGTH_SHORT
             ).show()
         }
@@ -479,7 +493,11 @@ class MainActivity : AppCompatActivity() {
             val persist: () -> Unit = {
                 lifecycleScope.launch {
                     repo.updateInstantFocusApps(oldSession.id, newApps)
-                    Toast.makeText(this@MainActivity, "Focus apps updated", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(
+                        this@MainActivity,
+                        R.string.toast_focus_apps_updated,
+                        Toast.LENGTH_SHORT
+                    ).show()
                 }
             }
 

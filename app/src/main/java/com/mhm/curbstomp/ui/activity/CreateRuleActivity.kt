@@ -7,6 +7,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.mhm.curbstomp.R
 import com.mhm.curbstomp.appContainer
 import com.mhm.curbstomp.data.models.AppLimit
 import com.mhm.curbstomp.data.models.Rule
@@ -69,7 +70,7 @@ class CreateRuleActivity : AppCompatActivity() {
 
         binding.toolbar.setNavigationOnClickListener { finish() }
         if (editingRuleId != null) {
-            binding.toolbar.title = "Edit Rule"
+            binding.toolbar.setTitle(R.string.title_edit_rule)
         }
 
         appLimitAdapter = AppLimitAdapter(
@@ -170,8 +171,14 @@ class CreateRuleActivity : AppCompatActivity() {
     }
 
     private fun syncTimeButtons() {
-        binding.btnStartTime.text = "Start: ${RuleEngine.formatTime12Hour(startTimeStr)}"
-        binding.btnEndTime.text = "End: ${RuleEngine.formatTime12Hour(endTimeStr)}"
+        binding.btnStartTime.text = getString(
+            R.string.rule_start_time,
+            RuleEngine.formatTime12Hour(startTimeStr)
+        )
+        binding.btnEndTime.text = getString(
+            R.string.rule_end_time,
+            RuleEngine.formatTime12Hour(endTimeStr)
+        )
     }
 
     private fun syncModeRadios() {
@@ -224,13 +231,13 @@ class CreateRuleActivity : AppCompatActivity() {
     private fun saveRule() {
         val name = binding.etRuleName.text?.toString().orEmpty()
         if (name.isEmpty()) {
-            binding.etRuleName.error = "Name required"
+            binding.etRuleName.error = getString(R.string.error_rule_name_required)
             return
         }
 
         val days = getSelectedDays()
         if (days.isEmpty()) {
-            Toast.makeText(this, "Select at least one repeating day", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.toast_select_one_day, Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -256,7 +263,7 @@ class CreateRuleActivity : AppCompatActivity() {
             val persist: () -> Unit = {
                 lifecycleScope.launch {
                     repo.upsertRule(newRule)
-                    Toast.makeText(this@CreateRuleActivity, "Rule Saved", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@CreateRuleActivity, R.string.toast_rule_saved, Toast.LENGTH_SHORT).show()
                     finish()
                 }
             }

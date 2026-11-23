@@ -154,8 +154,16 @@ class RuleAdapter(
         val inflater = LayoutInflater.from(context)
 
         holder.binding.tvRuleName.text = rule.name
-        holder.binding.tvRuleTime.text = "${rule.startTime} - ${rule.endTime}"
-        holder.binding.tvRuleApps.text = "${rule.appLimits.size} apps selected"
+        holder.binding.tvRuleTime.text = context.getString(
+            com.mhm.curbstomp.R.string.rule_time_range,
+            rule.startTime,
+            rule.endTime
+        )
+        holder.binding.tvRuleApps.text = context.resources.getQuantityString(
+            com.mhm.curbstomp.R.plurals.rule_apps_selected_count,
+            rule.appLimits.size,
+            rule.appLimits.size
+        )
         holder.binding.switchRuleActive.isChecked = rule.isActive
 
         val isExpanded = expandedRuleIds.contains(rule.id)
@@ -203,14 +211,14 @@ class RuleAdapter(
                 if (limit.maxUsageMillis == 0L) {
                     statBinding.pbUsage.progress = 100
                     statBinding.pbUsage.progressTintList = ColorStateList.valueOf(Color.RED)
-                    statBinding.tvStatUsage.text = "0m"
-                    statBinding.tvStatRemaining.text = "Blocked"
+                    statBinding.tvStatUsage.setText(com.mhm.curbstomp.R.string.stat_zero_minutes)
+                    statBinding.tvStatRemaining.setText(com.mhm.curbstomp.R.string.stat_blocked)
                 } else {
                     val progress = if (maxMins > 0L) ((usedMins.toFloat() / maxMins) * 100f).toInt() else 0
                     statBinding.pbUsage.progress = progress.coerceAtMost(100)
                     val remainingMins = (maxMins - usedMins).coerceAtLeast(0L)
-                    statBinding.tvStatUsage.text = "${usedMins}m"
-                    statBinding.tvStatRemaining.text = "${remainingMins}m"
+                    statBinding.tvStatUsage.text = context.getString(com.mhm.curbstomp.R.string.stat_minutes, usedMins)
+                    statBinding.tvStatRemaining.text = context.getString(com.mhm.curbstomp.R.string.stat_minutes, remainingMins)
                     statBinding.pbUsage.progressTintList = ColorStateList.valueOf(
                         if (remainingMins == 0L) Color.RED else greenColor
                     )

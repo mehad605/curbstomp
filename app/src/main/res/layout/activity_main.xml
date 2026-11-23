@@ -20,7 +20,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="CURBSTOMP"
+            android:text="@string/app_title_upper"
             android:gravity="center"
             android:fontFamily="@font/playfair_display"
             android:textColor="?attr/colorPrimary"
@@ -64,7 +64,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical">
-                    
+
                     <LinearLayout
                         android:id="@+id/rowAccessibility"
                         android:layout_width="match_parent"
@@ -75,27 +75,27 @@
                         android:background="?attr/selectableItemBackground"
                         android:clickable="true"
                         android:focusable="true">
-                        
+
                         <LinearLayout
                             android:layout_width="0dp"
                             android:layout_weight="1"
                             android:layout_height="wrap_content"
                             android:orientation="vertical"
                             android:layout_marginEnd="16dp">
-                            
+
                             <TextView
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:text="Force Kill on Expiry"
+                                android:text="@string/toggle_force_kill_title"
                                 android:fontFamily="@font/inter"
                                 android:textStyle="bold"
                                 android:textColor="?attr/colorPrimary"
                                 android:textSize="14sp" />
-                                
+
                             <TextView
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:text="Required to automatically close blocked apps when their limit is reached or during Instant Focus. Requires Accessibility permission."
+                                android:text="@string/toggle_force_kill_desc"
                                 android:fontFamily="@font/inter"
                                 android:textColor="?attr/colorOnSurfaceVariant"
                                 android:textSize="12sp"
@@ -110,7 +110,7 @@
                             android:clickable="false"
                             android:focusable="false" />
                     </LinearLayout>
-                        
+
                     <View
                         android:layout_width="match_parent"
                         android:layout_height="1dp"
@@ -126,27 +126,27 @@
                         android:background="?attr/selectableItemBackground"
                         android:clickable="true"
                         android:focusable="true">
-                        
+
                         <LinearLayout
                             android:layout_width="0dp"
                             android:layout_weight="1"
                             android:layout_height="wrap_content"
                             android:orientation="vertical"
                             android:layout_marginEnd="16dp">
-                            
+
                             <TextView
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:text="Uninstall Invincibility"
+                                android:text="@string/toggle_uninstall_invincibility_title"
                                 android:fontFamily="@font/inter"
                                 android:textStyle="bold"
                                 android:textColor="?attr/colorPrimary"
                                 android:textSize="14sp" />
-                                
+
                             <TextView
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:text="Prevents bypassing restrictions by blocking unauthorized uninstallation of Curbstomp. Requires Device Admin permission."
+                                android:text="@string/toggle_uninstall_invincibility_desc"
                                 android:fontFamily="@font/inter"
                                 android:textColor="?attr/colorOnSurfaceVariant"
                                 android:textSize="12sp"
@@ -161,7 +161,7 @@
                             android:clickable="false"
                             android:focusable="false" />
                     </LinearLayout>
-                    
+
                     <View
                         android:layout_width="match_parent"
                         android:layout_height="1dp"
@@ -188,7 +188,7 @@
                             <TextView
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:text="Extra Harden (Block Settings)"
+                                android:text="@string/toggle_extra_harden_title"
                                 android:fontFamily="@font/inter"
                                 android:textStyle="bold"
                                 android:textColor="?attr/colorPrimary"
@@ -197,7 +197,7 @@
                             <TextView
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:text="Completely blocks the Settings app at all times. Prevents any settings modifications."
+                                android:text="@string/toggle_extra_harden_desc"
                                 android:fontFamily="@font/inter"
                                 android:textColor="?attr/colorOnSurfaceVariant"
                                 android:textSize="12sp"
@@ -238,12 +238,12 @@
                         android:orientation="horizontal"
                         android:padding="16dp"
                         android:gravity="center_vertical">
-                        
+
                         <TextView
                             android:layout_width="0dp"
                             android:layout_weight="1"
                             android:layout_height="wrap_content"
-                            android:text="Rules"
+                            android:text="@string/section_rules"
                             android:fontFamily="@font/playfair_display"
                             android:textColor="?attr/colorPrimary"
                             android:textStyle="bold"
@@ -253,8 +253,7 @@
                             android:id="@+id/btnCreateRule"
                             android:layout_width="wrap_content"
                             android:layout_height="40dp"
-                            android:text="NEW RULE"
-
+                            android:text="@string/action_new_rule"
                             android:fontFamily="@font/inter"
                             android:textSize="11sp"
                             android:textStyle="bold"
@@ -296,7 +295,7 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Instant Focus"
+                        android:text="@string/section_instant_focus"
                         android:fontFamily="@font/playfair_display"
                         android:textColor="?attr/colorPrimary"
                         android:textSize="24sp"
@@ -305,7 +304,7 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Quickly block distracting apps for a set duration."
+                        android:text="@string/instant_focus_subtitle"
                         android:fontFamily="@font/inter"
                         android:textColor="?attr/colorOnSurfaceVariant"
                         android:textSize="14sp"
@@ -324,7 +323,7 @@
                             android:id="@+id/tvActiveFocusCountdown"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="00:00:00"
+                            tools:text="00:00:00"
                             android:fontFamily="@font/playfair_display"
                             android:textColor="?attr/colorPrimary"
                             android:textSize="48sp"
@@ -335,7 +334,7 @@
                             android:id="@+id/tvActiveFocusMode"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="ALLOWED APPS"
+                            tools:text="ONLY THESE APPS ALLOWED"
                             android:fontFamily="@font/inter"
                             android:textColor="?attr/colorOnSurfaceVariant"
                             android:textSize="11sp"
@@ -356,7 +355,7 @@
                                 android:orientation="horizontal"
                                 android:gravity="center_vertical" />
                         </HorizontalScrollView>
-                        
+
                         <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
@@ -368,7 +367,7 @@
                                 android:layout_width="0dp"
                                 android:layout_weight="1"
                                 android:layout_height="56dp"
-                                android:text="PAUSE"
+                                android:text="@string/action_pause"
                                 android:fontFamily="@font/inter"
                                 android:textSize="11sp"
                                 android:textStyle="bold"
@@ -384,7 +383,7 @@
                                 android:layout_width="0dp"
                                 android:layout_weight="1"
                                 android:layout_height="56dp"
-                                android:text="STOP"
+                                android:text="@string/action_stop"
                                 android:fontFamily="@font/inter"
                                 android:textSize="11sp"
                                 android:textStyle="bold"
@@ -408,7 +407,7 @@
                                 android:layout_width="0dp"
                                 android:layout_weight="1"
                                 android:layout_height="56dp"
-                                android:text="EDIT APPS"
+                                android:text="@string/action_edit_apps"
                                 android:fontFamily="@font/inter"
                                 android:textSize="11sp"
                                 android:textStyle="bold"
@@ -424,7 +423,7 @@
                                 android:layout_width="0dp"
                                 android:layout_weight="1"
                                 android:layout_height="56dp"
-                                android:text="ADD TIME"
+                                android:text="@string/action_add_time"
                                 android:fontFamily="@font/inter"
                                 android:textSize="11sp"
                                 android:textStyle="bold"
@@ -444,13 +443,13 @@
                         android:layout_height="wrap_content"
                         android:orientation="horizontal"
                         android:weightSum="3">
-                        
+
                         <Button
                             android:id="@+id/btnInstantFocus30m"
                             android:layout_width="0dp"
                             android:layout_weight="1"
                             android:layout_height="wrap_content"
-                            android:text="30 MIN"
+                            android:text="@string/quick_focus_30m"
                             android:fontFamily="@font/inter"
                             android:textSize="11sp"
                             android:textStyle="bold"
@@ -467,7 +466,7 @@
                             android:layout_width="0dp"
                             android:layout_weight="1"
                             android:layout_height="wrap_content"
-                            android:text="1 HR"
+                            android:text="@string/quick_focus_1h"
                             android:fontFamily="@font/inter"
                             android:textSize="11sp"
                             android:textStyle="bold"
@@ -484,7 +483,7 @@
                             android:layout_width="0dp"
                             android:layout_weight="1"
                             android:layout_height="wrap_content"
-                            android:text="CUSTOM"
+                            android:text="@string/quick_focus_custom"
                             android:fontFamily="@font/inter"
                             android:textSize="11sp"
                             android:textStyle="bold"
@@ -521,12 +520,12 @@
                         android:paddingHorizontal="24dp"
                         android:paddingBottom="16dp"
                         android:gravity="center_vertical">
-                        
+
                         <TextView
                             android:layout_width="0dp"
                             android:layout_weight="1"
                             android:layout_height="wrap_content"
-                            android:text="Security"
+                            android:text="@string/section_security"
                             android:fontFamily="@font/playfair_display"
                             android:textColor="?attr/colorPrimary"
                             android:textSize="24sp" />
@@ -544,7 +543,7 @@
                         android:layout_marginTop="24dp"
                         android:layout_marginHorizontal="24dp"
                         android:layout_marginBottom="24dp"
-                        android:text="SET PASSWORD"
+                        android:text="@string/action_set_password"
                         android:fontFamily="@font/inter"
                         android:textSize="11sp"
                         android:textStyle="bold"

@@ -12,7 +12,7 @@
         android:paddingBottom="10dp"
         android:paddingHorizontal="16dp"
         android:textColor="?attr/colorOnSurfaceVariant"
-        android:textSize="10sp"
+        android:textSize="11sp"
         android:fontFamily="@font/inter"
         android:textAllCaps="true"
         android:letterSpacing="0.12"

@@ -32,7 +32,8 @@ class SelectAppsActivity : AppCompatActivity() {
         binding = ActivitySelectAppsBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        binding.toolbarTitle.text = intent.getStringExtra(EXTRA_TITLE) ?: "Select Apps"
+        binding.toolbarTitle.text = intent.getStringExtra(EXTRA_TITLE)
+            ?: getString(com.mhm.curbstomp.R.string.title_select_apps)
 
         val initialSelection = savedInstanceState?.getStringArrayList(STATE_SELECTED_APPS)
             ?: intent.getStringArrayListExtra(EXTRA_PRE_SELECTED_APPS)

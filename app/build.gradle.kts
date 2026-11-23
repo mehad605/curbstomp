@@ -1,4 +1,6 @@
 import java.util.Locale
+import javax.inject.Inject
+import org.gradle.process.ExecOperations
 
 plugins {
     alias(libs.plugins.android.application)
@@ -11,7 +13,7 @@ android {
 
     lint {
         disable.add("NullSafeMutableLiveData")
-        abortOnError = false
+        abortOnError = true
     }
 
     defaultConfig {
@@ -74,11 +76,11 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions {
-        jvmTarget = "1.8"
+        jvmTarget = "17"
     }
     buildFeatures {
         viewBinding = true
@@ -101,10 +103,7 @@ android {
     }
 }
 
-
-
 dependencies {
-
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material) {
@@ -115,34 +114,43 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
 
     testImplementation(libs.junit)
-    testImplementation("org.json:json:20240303")
+    testImplementation(libs.org.json)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 }
+
+abstract class InstallAndGrantAccessibilityTask : DefaultTask() {
+    @get:Inject
+    abstract val execOperations: ExecOperations
+
+    @get:Input
+    abstract val adbPath: Property<String>
+
+    @TaskAction
+    fun run() {
+        val adb = adbPath.get()
+        val appId = "com.mhm.curbstomp"
+        Thread.sleep(2000)
+        execOperations.exec {
+            val combinedServices = "$appId/$appId.services.CurbstompService"
+            commandLine(adb, "shell", "settings", "put", "secure", "enabled_accessibility_services", combinedServices)
+        }
+        execOperations.exec {
+            commandLine(adb, "shell", "am", "start", "-n", "$appId/$appId.ui.activity.MainActivity")
+        }
+    }
+}
+
 androidComponents {
     onVariants { variant ->
-        val variantName = variant.name.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
-        tasks.register("installAndGrantAccessibility$variantName") {
+        val variantName = variant.name.replaceFirstChar {
+            if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString()
+        }
+        tasks.register<InstallAndGrantAccessibilityTask>("installAndGrantAccessibility$variantName") {
             group = "install"
             description = "Installs the app, grants Accessibility permission, and launches it"
             dependsOn("install$variantName")
-            
-            doLast {
-                val adbPath = sdkComponents.adb.get().asFile.absolutePath
-                val appId = "com.mhm.curbstomp"
-                Thread.sleep(2000)
-                // Grant Accessibility Permission
-                exec {
-                    val combinedServices = "$appId/$appId.services.CurbstompService"
-
-                    commandLine(adbPath, "shell", "settings", "put", "secure", "enabled_accessibility_services", combinedServices)
-                }
-                
-                // Launch MainActivity
-                exec {
-                    commandLine(adbPath, "shell", "am", "start", "-n", "$appId/$appId.ui.activity.MainActivity")
-                }
-            }
+            adbPath.set(sdkComponents.adb.map { it.asFile.absolutePath })
         }
     }
 }

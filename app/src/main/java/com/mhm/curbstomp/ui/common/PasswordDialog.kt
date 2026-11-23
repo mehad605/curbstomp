@@ -8,6 +8,7 @@ import android.widget.Toast
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetDialog
+import com.mhm.curbstomp.R
 import com.mhm.curbstomp.data.repository.SettingsRepository
 import com.mhm.curbstomp.databinding.DialogPasswordBinding
 import com.mhm.curbstomp.domain.PasswordHasher
@@ -48,7 +49,7 @@ object PasswordDialog {
         val binding = DialogPasswordBinding.inflate(LayoutInflater.from(context))
         dialog.setContentView(binding.root)
 
-        binding.tvTitle.text = "Enter Password"
+        binding.tvTitle.setText(R.string.dialog_enter_password)
         binding.tilConfirmPassword.visibility = View.GONE
 
         binding.btnCancel.setOnClickListener {
@@ -59,13 +60,13 @@ object PasswordDialog {
             val now = SystemClock.elapsedRealtime()
             if (now < lockoutUntilElapsedMs) {
                 val secsLeft = ((lockoutUntilElapsedMs - now) + 999L) / 1000L
-                binding.tilPassword.error = "Too many attempts. Try again in ${secsLeft}s"
+                binding.tilPassword.error = context.getString(R.string.error_too_many_attempts, secsLeft)
                 return@setOnClickListener
             }
 
             val pass = binding.etPassword.text?.toString().orEmpty()
             if (pass.isEmpty()) {
-                binding.tilPassword.error = "Required"
+                binding.tilPassword.error = context.getString(R.string.error_required)
                 return@setOnClickListener
             }
 
@@ -98,9 +99,9 @@ object PasswordDialog {
                         val lockoutMs = (BASE_LOCKOUT_MS shl exponent).coerceAtMost(MAX_LOCKOUT_MS)
                         lockoutUntilElapsedMs = SystemClock.elapsedRealtime() + lockoutMs
                         val secs = lockoutMs / 1000L
-                        binding.tilPassword.error = "Incorrect password. Wait ${secs}s"
+                        binding.tilPassword.error = context.getString(R.string.error_incorrect_password_wait, secs)
                     } else {
-                        binding.tilPassword.error = "Incorrect Password"
+                        binding.tilPassword.error = context.getString(R.string.error_incorrect_password)
                     }
                 }
             }
@@ -132,7 +133,7 @@ object PasswordDialog {
         val binding = DialogPasswordBinding.inflate(LayoutInflater.from(context))
         dialog.setContentView(binding.root)
 
-        binding.tvTitle.text = "Set New Password"
+        binding.tvTitle.setText(R.string.dialog_set_new_password)
         binding.tilConfirmPassword.visibility = View.VISIBLE
 
         binding.btnCancel.setOnClickListener {
@@ -144,13 +145,13 @@ object PasswordDialog {
             val confirm = binding.etConfirmPassword.text?.toString().orEmpty()
 
             if (pass.isEmpty()) {
-                binding.tilPassword.error = "Required"
+                binding.tilPassword.error = context.getString(R.string.error_required)
                 return@setOnClickListener
             }
             binding.tilPassword.error = null
 
             if (pass != confirm) {
-                binding.tilConfirmPassword.error = "Passwords do not match"
+                binding.tilConfirmPassword.error = context.getString(R.string.error_password_mismatch)
                 return@setOnClickListener
             }
             binding.tilConfirmPassword.error = null
@@ -161,7 +162,7 @@ object PasswordDialog {
                     PasswordHasher.hash(pass)
                 }
                 settingsRepository.updatePasswordHash(hashed)
-                Toast.makeText(context, "Password updated successfully", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, R.string.toast_password_updated, Toast.LENGTH_SHORT).show()
                 if (dialog.isShowing) {
                     dialog.dismiss()
                 }

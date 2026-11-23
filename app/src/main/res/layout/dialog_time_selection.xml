@@ -3,22 +3,20 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:background="?attr/colorSurface">
+    android:orientation="vertical">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center"
-        android:padding="24dp"
-        android:background="?attr/colorSurface">
-        
+        android:padding="24dp">
+
         <TextView
             android:id="@+id/tvPickerTitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="SELECT TIME"
+            android:text="@string/dialog_select_time_title"
             android:fontFamily="@font/playfair_display"
             android:letterSpacing="0.1"
             android:textSize="20sp"
@@ -40,14 +38,14 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="TIME"
+            android:text="@string/label_time"
             android:fontFamily="@font/inter"
             android:letterSpacing="0.15"
             android:textSize="11sp"
             android:textStyle="bold"
             android:textColor="?attr/colorOnSurfaceVariant"
             android:gravity="center"
-            android:layout_marginBottom="24dp"/>
+            android:layout_marginBottom="24dp" />
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -60,31 +58,31 @@
                 android:id="@+id/npHours"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:theme="@style/Theme.AppCompat.DayNight"/>
+                android:theme="@style/Theme.AppCompat.DayNight" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text=":"
+                android:text="@string/time_colon"
                 android:fontFamily="@font/inter"
                 android:textSize="20sp"
                 android:textColor="?attr/colorOnSurfaceVariant"
                 android:layout_gravity="center_vertical"
                 android:layout_marginStart="8dp"
-                android:layout_marginEnd="8dp"/>
+                android:layout_marginEnd="8dp" />
 
             <NumberPicker
                 android:id="@+id/npMinutes"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:theme="@style/Theme.AppCompat.DayNight"/>
+                android:theme="@style/Theme.AppCompat.DayNight" />
 
             <NumberPicker
                 android:id="@+id/npAmPm"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="16dp"
-                android:theme="@style/Theme.AppCompat.DayNight"/>
+                android:theme="@style/Theme.AppCompat.DayNight" />
 
         </LinearLayout>
 
@@ -99,12 +97,12 @@
         android:id="@+id/btnSaveTime"
         android:layout_width="match_parent"
         android:layout_height="64dp"
-        android:text="APPLY"
+        android:text="@string/action_apply"
         android:fontFamily="@font/inter"
         android:letterSpacing="0.1"
         android:textColor="?attr/colorSurface"
         app:cornerRadius="0dp"
         app:backgroundTint="?attr/colorPrimary"
-        style="@style/Widget.MaterialComponents.Button"/>
+        style="@style/Widget.MaterialComponents.Button" />
 
 </LinearLayout>

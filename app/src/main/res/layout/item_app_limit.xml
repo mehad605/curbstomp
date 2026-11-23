@@ -1,17 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="horizontal"
     android:padding="12dp"
     android:gravity="center_vertical"
     android:layout_marginBottom="8dp"
-    android:background="?attr/colorSurfaceVariant">
+    android:background="?attr/colorSurfaceVariant"
+    tools:ignore="Overdraw">
 
     <ImageView
         android:id="@+id/ivAppIcon"
         android:layout_width="40dp"
         android:layout_height="40dp"
+        android:importantForAccessibility="no"
         android:layout_marginEnd="12dp" />
 
     <LinearLayout
@@ -24,7 +27,7 @@
             android:id="@+id/tvAppName"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="App Name"
+            tools:text="App Name"
             android:textColor="?attr/colorOnSurface"
             android:textSize="16sp"
             android:textStyle="bold" />
@@ -33,7 +36,7 @@
             android:id="@+id/tvAppLimit"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Blocked (0m)"
+            tools:text="Blocked (0 min)"
             android:textColor="?attr/colorOnSurfaceVariant"
             android:textSize="14sp" />
     </LinearLayout>
@@ -43,14 +46,14 @@
         style="@style/Widget.Material3.Button.TextButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Limit" />
-        
+        android:text="@string/action_limit" />
+
     <ImageButton
         android:id="@+id/btnRemove"
         android:layout_width="48dp"
         android:layout_height="48dp"
         android:background="?attr/selectableItemBackgroundBorderless"
         android:src="@android:drawable/ic_menu_delete"
-        android:contentDescription="Remove" />
+        android:contentDescription="@string/cd_remove_app" />
 
 </LinearLayout>

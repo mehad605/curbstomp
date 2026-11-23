@@ -1,9 +1,163 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Curbstomp</string>
+    <string name="app_title_upper">CURBSTOMP</string>
+
+    <!-- System permission descriptions -->
     <string name="accessibility_permission_app_blocker">
         Curbstomp uses Accessibility to:\n1. Detect when you open an app and enforce block/allow rules\n2. Send you home when a blocked app is opened during a rule or focus session\n3. Protect Curbstomp from being force-stopped or uninstalled\n\n
         All processing happens on your device. No data is collected or transmitted.
     </string>
     <string name="admin_permission_desc">Curbstomp Anti-Uninstall Protection</string>
+    <string name="admin_permission_explanation">Required to prevent the app from being uninstalled or force-stopped.</string>
+
+    <!-- Main dashboard: Protection toggles -->
+    <string name="toggle_force_kill_title">Force Kill on Expiry</string>
+    <string name="toggle_force_kill_desc">Required to automatically close blocked apps when their limit is reached or during Instant Focus. Requires Accessibility permission.</string>
+    <string name="toggle_uninstall_invincibility_title">Uninstall Invincibility</string>
+    <string name="toggle_uninstall_invincibility_desc">Prevents bypassing restrictions by blocking unauthorized uninstallation of Curbstomp. Requires Device Admin permission.</string>
+    <string name="toggle_extra_harden_title">Extra Harden (Block Settings)</string>
+    <string name="toggle_extra_harden_desc">Completely blocks the Settings app at all times. Prevents any settings modifications.</string>
+
+    <!-- Main dashboard: Rules section -->
+    <string name="section_rules">Rules</string>
+    <string name="action_new_rule">NEW RULE</string>
+    <string name="rules_header_active">Active</string>
+    <string name="rules_header_inactive">Inactive</string>
+    <string name="col_app">APP</string>
+    <string name="col_used">USED</string>
+    <string name="col_remaining">REMAINING</string>
+    <string name="rule_time_range">%1$s - %2$s</string>
+    <plurals name="rule_apps_selected_count">
+        <item quantity="one">%1$d app selected</item>
+        <item quantity="other">%1$d apps selected</item>
+    </plurals>
+    <string name="stat_minutes">%1$dm</string>
+    <string name="stat_zero_minutes">0m</string>
+    <string name="stat_blocked">Blocked</string>
+    <string name="cd_expand_rule">Expand or collapse rule statistics</string>
+    <string name="cd_edit_rule">Edit rule</string>
+    <string name="cd_delete_rule">Delete rule</string>
+
+    <!-- Main dashboard: Instant Focus section -->
+    <string name="section_instant_focus">Instant Focus</string>
+    <string name="instant_focus_subtitle">Quickly block distracting apps for a set duration.</string>
+    <string name="focus_mode_allowed_only">ONLY THESE APPS ALLOWED</string>
+    <string name="focus_mode_blocked">THESE APPS BLOCKED</string>
+    <string name="focus_extra_apps_count">+%1$d</string>
+    <string name="action_pause">PAUSE</string>
+    <string name="action_resume">RESUME</string>
+    <string name="action_stop">STOP</string>
+    <string name="action_edit_apps">EDIT APPS</string>
+    <string name="action_add_time">ADD TIME</string>
+    <string name="quick_focus_30m">30 MIN</string>
+    <string name="quick_focus_1h">1 HR</string>
+    <string name="quick_focus_custom">CUSTOM</string>
+
+    <!-- Main dashboard: Security section -->
+    <string name="section_security">Security</string>
+    <string name="action_set_password">SET PASSWORD</string>
+    <string name="action_update_password">UPDATE PASSWORD</string>
+
+    <!-- Confirmation dialogs -->
+    <string name="dialog_enable_admin_title">Enable Uninstall Invincibility?</string>
+    <string name="dialog_enable_admin_message">This will prevent the app from being uninstalled or force-closed. You will need to use your Curbstomp password to disable this feature later. Are you absolutely sure?</string>
+    <string name="dialog_enable_extra_harden_title">Enable Extra Harden?</string>
+    <string name="dialog_enable_extra_harden_message">This will make it VERY difficult to uninstall the app and you will be completely unable to open the Settings app. You may need to use adb commands to disable this if you forget your password or get locked out. Are you absolutely sure?</string>
+    <string name="action_understand_and_enable">I UNDERSTAND &amp; ENABLE</string>
+
+    <!-- Add Focus Time dialog -->
+    <string name="dialog_add_focus_time_title">Add Time to Focus</string>
+    <string name="option_plus_10_min">+10 Minutes</string>
+    <string name="option_plus_30_min">+30 Minutes</string>
+    <string name="option_plus_1_hour">+1 Hour</string>
+    <string name="option_plus_2_hours">+2 Hours</string>
+    <string name="option_custom">Custom…</string>
+    <plurals name="toast_added_focus_time">
+        <item quantity="one">Added %1$d minute to focus session</item>
+        <item quantity="other">Added %1$d minutes to focus session</item>
+    </plurals>
+    <string name="toast_focus_apps_updated">Focus apps updated</string>
+    <string name="title_edit_focus_apps">Edit Focus Apps</string>
+
+    <!-- Create / Edit Rule screen -->
+    <string name="title_create_rule">CREATE RULE</string>
+    <string name="title_edit_rule">Edit Rule</string>
+    <string name="hint_rule_name">Rule Name (e.g. Work Hours)</string>
+    <string name="rule_start_time">Start: %1$s</string>
+    <string name="rule_end_time">End: %1$s</string>
+    <string name="label_repeating_days">REPEATING DAYS</string>
+    <string name="day_sun_short">S</string>
+    <string name="day_mon_short">M</string>
+    <string name="day_tue_short">T</string>
+    <string name="day_wed_short">W</string>
+    <string name="day_thu_short">T</string>
+    <string name="day_fri_short">F</string>
+    <string name="day_sat_short">S</string>
+    <string name="label_enforcement_protocol">ENFORCEMENT PROTOCOL</string>
+    <string name="protocol_allow_only_title">Allow Only These</string>
+    <string name="protocol_allow_only_desc">Block everything else. Maximum restriction.</string>
+    <string name="protocol_block_these_title">Block These</string>
+    <string name="protocol_block_these_desc">Blacklist specific applications only.</string>
+    <string name="label_selected_apps">SELECTED APPS</string>
+    <string name="action_add_apps">ADD APPS</string>
+    <string name="action_save_rule">SAVE RULE</string>
+    <string name="error_rule_name_required">Name required</string>
+    <string name="toast_select_one_day">Select at least one repeating day</string>
+    <string name="toast_rule_saved">Rule Saved</string>
+
+    <!-- Instant Focus setup screen -->
+    <string name="title_edit_focus">Edit Focus</string>
+    <string name="label_duration">DURATION</string>
+    <string name="label_tap_to_change">TAP TO CHANGE</string>
+    <string name="label_apps">APPS</string>
+    <string name="action_add_apps_plus">ADD APPS +</string>
+    <string name="action_start_focus">START FOCUS</string>
+    <string name="action_save_focus">SAVE FOCUS</string>
+    <string name="duration_hours_minutes">%1$dh %2$dm</string>
+    <string name="duration_minutes_only">%1$dm</string>
+    <string name="toast_valid_duration">Please set a valid duration</string>
+    <string name="toast_select_one_app">Select at least one app</string>
+    <string name="dialog_focus_mode_title">What should happen to these apps?</string>
+    <string name="toast_instant_focus_saved">Instant Focus Saved</string>
+
+    <!-- Select Apps screen -->
+    <string name="title_select_apps">SELECT APPS</string>
+    <string name="hint_search_apps">Search apps…</string>
+    <string name="action_confirm_upper">CONFIRM</string>
+
+    <!-- App limit item -->
+    <string name="limit_blocked_zero">Blocked (0 min)</string>
+    <string name="limit_minutes">Limit: %1$d min</string>
+    <string name="action_limit">Limit</string>
+    <string name="cd_remove_app">Remove app</string>
+
+    <!-- Password dialog -->
+    <string name="dialog_enter_password">Enter Password</string>
+    <string name="dialog_set_new_password">Set New Password</string>
+    <string name="hint_password">Password</string>
+    <string name="hint_confirm_password">Confirm Password</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_confirm">Confirm</string>
+    <string name="error_required">Required</string>
+    <string name="error_incorrect_password">Incorrect Password</string>
+    <string name="error_password_mismatch">Passwords do not match</string>
+    <string name="error_too_many_attempts">Too many attempts. Try again in %1$ds</string>
+    <string name="error_incorrect_password_wait">Incorrect password. Wait %1$ds</string>
+    <string name="toast_password_updated">Password updated successfully</string>
+
+    <!-- Time picker dialogs -->
+    <string name="dialog_edit_limit_title">EDIT LIMIT</string>
+    <string name="dialog_select_time_title">SELECT TIME</string>
+    <string name="label_time">TIME</string>
+    <string name="unit_hour">hr</string>
+    <string name="unit_minute">min</string>
+    <string name="time_colon">:</string>
+    <string name="action_fully_block">FULLY BLOCK</string>
+    <string name="action_apply">APPLY</string>
+
+    <!-- Service enforcement toasts -->
+    <string name="toast_blocked_default">Blocked!</string>
+    <string name="toast_self_protection_full">Self-protection: Cannot disable accessibility, force stop, clear data, deactivate admin, or uninstall Curbstomp!</string>
+    <string name="toast_self_protection_standard">Self-protection: Cannot disable accessibility, force stop, clear data, or uninstall Curbstomp!</string>
 </resources>

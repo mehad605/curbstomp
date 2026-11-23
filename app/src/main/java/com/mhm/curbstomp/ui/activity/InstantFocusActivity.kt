@@ -8,6 +8,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.mhm.curbstomp.R
 import com.mhm.curbstomp.appContainer
 import com.mhm.curbstomp.data.models.AppLimit
 import com.mhm.curbstomp.data.models.InstantFocus
@@ -89,8 +90,8 @@ class InstantFocusActivity : AppCompatActivity() {
         }
 
         if (editingFocusId != null) {
-            binding.toolbar.title = "Edit Focus"
-            binding.btnStart.text = "SAVE FOCUS"
+            binding.toolbar.setTitle(R.string.title_edit_focus)
+            binding.btnStart.setText(R.string.action_save_focus)
         }
 
         if (savedInstanceState != null) {
@@ -128,7 +129,11 @@ class InstantFocusActivity : AppCompatActivity() {
         durationMins = mins
         val h = mins / 60L
         val m = mins % 60L
-        binding.tvDurationDisplay.text = if (h > 0L) "${h}h ${m}m" else "${m}m"
+        binding.tvDurationDisplay.text = if (h > 0L) {
+            getString(R.string.duration_hours_minutes, h, m)
+        } else {
+            getString(R.string.duration_minutes_only, m)
+        }
     }
 
     private fun showDurationPicker() {
@@ -143,17 +148,20 @@ class InstantFocusActivity : AppCompatActivity() {
 
     private fun showModeSelectionDialog() {
         if (durationMins <= 0L) {
-            Toast.makeText(this, "Please set a valid duration", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.toast_valid_duration, Toast.LENGTH_SHORT).show()
             return
         }
         if (selectedPackages.isEmpty()) {
-            Toast.makeText(this, "Select at least one app", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.toast_select_one_app, Toast.LENGTH_SHORT).show()
             return
         }
 
-        val options = arrayOf("Allow Only These", "Block These")
+        val options = arrayOf(
+            getString(R.string.protocol_allow_only_title),
+            getString(R.string.protocol_block_these_title)
+        )
         AlertDialog.Builder(this)
-            .setTitle("What should happen to these apps?")
+            .setTitle(R.string.dialog_focus_mode_title)
             .setItems(options) { _, which ->
                 isWhitelist = (which == 0)
                 saveFocusSession()
@@ -202,7 +210,11 @@ class InstantFocusActivity : AppCompatActivity() {
             val persist: () -> Unit = {
                 lifecycleScope.launch {
                     repo.upsertInstantFocus(newFocus)
-                    Toast.makeText(this@InstantFocusActivity, "Instant Focus Saved", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(
+                        this@InstantFocusActivity,
+                        R.string.toast_instant_focus_saved,
+                        Toast.LENGTH_SHORT
+                    ).show()
                     finish()
                 }
             }

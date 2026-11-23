@@ -70,12 +70,13 @@ class AppLimitAdapter(
         )
 
         if (showLimits) {
+            val context = holder.itemView.context
             holder.binding.tvAppLimit.visibility = View.VISIBLE
             holder.binding.btnSetLimit.visibility = View.VISIBLE
             holder.binding.tvAppLimit.text = if (limitMinutes == 0L) {
-                "Blocked (0 min)"
+                context.getString(com.mhm.curbstomp.R.string.limit_blocked_zero)
             } else {
-                "Limit: $limitMinutes min"
+                context.getString(com.mhm.curbstomp.R.string.limit_minutes, limitMinutes)
             }
             holder.binding.btnSetLimit.setOnClickListener {
                 onSetLimitClick?.invoke(packageName, entry.maxUsageMillis)

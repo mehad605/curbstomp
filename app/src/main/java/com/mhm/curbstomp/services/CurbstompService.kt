@@ -196,7 +196,7 @@ class CurbstompService : BaseBlockingService() {
 
         if (result.blocked) {
             sessionStartElapsedMs = 0L
-            kickUserOut(result.blockReason ?: "Blocked!")
+            kickUserOut(result.blockReason ?: getString(com.mhm.curbstomp.R.string.toast_blocked_default))
             return
         }
 
@@ -283,11 +283,13 @@ class CurbstompService : BaseBlockingService() {
 
             val flags = scanNodeTree(rootNode, initialFlags, settings.antiUninstallEnabled, isActivating)
             if (SelfProtectionDetector.shouldBlock(flags, settings.antiUninstallEnabled, isActivating)) {
-                val msg = if (settings.antiUninstallEnabled) {
-                    "Self-protection: Cannot disable accessibility, force stop, clear data, deactivate admin, or uninstall Curbstomp!"
-                } else {
-                    "Self-protection: Cannot disable accessibility, force stop, clear data, or uninstall Curbstomp!"
-                }
+                val msg = getString(
+                    if (settings.antiUninstallEnabled) {
+                        com.mhm.curbstomp.R.string.toast_self_protection_full
+                    } else {
+                        com.mhm.curbstomp.R.string.toast_self_protection_standard
+                    }
+                )
                 kickUserOut(msg, longToast = true)
             }
         } finally {
