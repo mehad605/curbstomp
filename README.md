@@ -58,7 +58,7 @@ app/src/main/java/com/mhm/curbstomp/
 
 1. **Persistence (`data/local`)**: `SettingsStore` reads/writes `filesDir/datastore/settings.json` atomically via `AtomicFile` + a `Mutex` and exposes a hot `StateFlow<Settings>`. Backup rules (`res/xml/backup_rules.xml`, `res/xml/data_extraction_rules.xml`) back up `datastore/settings.json` while excluding local crash logs and lockout counters.
 2. **Mutations (`data/repository`)**: UI and services never mutate raw JSON directly — all mutations go through semantic methods on `SettingsRepository`.
-3. **Pure Rules (`domain`)**: `RuleEngine`, `StrictModePolicy`, `PasswordHasher`, `PasswordLockoutPolicy`, and `SelfProtectionDetector` have no Android dependencies and are verified by fast JVM unit tests under `app/src/test/java/`.
+3. **Pure Rules (`domain`)**: `RuleEngine`, `StrictModePolicy`, `PasswordHasher`, `PasswordLockoutPolicy`, and `SelfProtectionDetector` have no Android dependencies and are verified by fast JVM unit tests under `app/src/test/java/`, alongside Robolectric tests covering `AtomicFileSettingsStorage`, `SystemPackageResolver`, `PasswordDialog`, and all four `Activity` lifecycles/rotations.
 4. **Enforcement (`services`)**: `CurbstompService` observes `SettingsRepository.settings` and reacts to `TYPE_WINDOW_STATE_CHANGED` / screen / time broadcasts, scheduling a single exact coroutine timer only when the foreground app has a finite remaining quota or upcoming rule transition.
 
 ---
@@ -68,7 +68,7 @@ app/src/main/java/com/mhm/curbstomp/
 **Requirements:** JDK 17 · Android SDK 34 (`compileSdk = 34`, `minSdk = 26`)
 
 ```bash
-# Run JVM unit tests (fast, no device/emulator required)
+# Run JVM + Robolectric unit tests (no device/emulator required)
 ./gradlew test
 
 # Compile or run AndroidX instrumented smoke tests (connected device/emulator required to execute)

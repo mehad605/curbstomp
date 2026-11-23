@@ -35,6 +35,10 @@ object PasswordDialog {
     @Volatile
     private var inProcessLockoutUntilElapsedMs: Long = 0L
 
+    internal fun resetInMemoryLockout() {
+        inProcessLockoutUntilElapsedMs = 0L
+    }
+
     private fun loadLockoutState(context: Context): PasswordLockoutPolicy.LockoutState {
         val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         return PasswordLockoutPolicy.LockoutState(
