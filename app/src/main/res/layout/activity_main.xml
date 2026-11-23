@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:orientation="vertical"
     android:background="?attr/colorSurfaceContainerLowest"
     tools:context=".ui.activity.MainActivity">
 
@@ -15,8 +16,7 @@
         android:orientation="vertical"
         android:background="?attr/colorSurfaceContainerLowest"
         android:paddingVertical="24dp"
-        android:paddingHorizontal="16dp"
-        app:layout_constraintTop_toTopOf="parent">
+        android:paddingHorizontal="16dp">
 
         <TextView
             android:layout_width="match_parent"
@@ -35,17 +35,15 @@
         android:id="@+id/headerDivider"
         android:layout_width="match_parent"
         android:layout_height="1dp"
-        android:background="?attr/colorOutlineVariant"
-        app:layout_constraintTop_toBottomOf="@id/header" />
+        android:background="?attr/colorOutlineVariant" />
 
     <!-- Main Canvas -->
     <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
+        android:layout_weight="1"
         android:clipToPadding="false"
-        android:padding="16dp"
-        app:layout_constraintTop_toBottomOf="@id/headerDivider"
-        app:layout_constraintBottom_toBottomOf="parent">
+        android:padding="16dp">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -561,4 +559,4 @@
 
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
-</androidx.constraintlayout.widget.ConstraintLayout>
+</LinearLayout>
