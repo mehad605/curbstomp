@@ -11,3 +11,4 @@
 
 | Iter | Finding ID | Change | Metric before → after | Delta | Regression check | Keep/Revert |
 |---|---|---|---|---|---|---|
+| 1 | F-002 | Remove 7 unused dependencies (`Room`, `ZXing`, `Shizuku`, `MPAndroidChart`, `TimeRangePicker`, `fragment-ktx`, `lifecycle-viewmodel-ktx:2.10.0`) + KSP plugin; add `lifecycle-runtime-ktx:2.8.7` | APK `6,332,773 → 5,691,733 B`; DL `5,310,043 → 4,684,689 B`; DEX refs `79,068 → 70,072`; Deps `18/103 → 10/79` | APK `-626.0 KB` (`-10.1%`); DL `-610.7 KB`; Deps `-24` | `lint` (0 err, 314 warn), `test`, `assembleRelease` PASS | **Keep** |
