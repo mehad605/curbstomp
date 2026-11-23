@@ -41,9 +41,9 @@ jobs:
         with:
           cache-read-only: ${{ github.event_name != 'push' }}
 
-      - name: Run unit tests, Android Lint, and release APK build
+      - name: Run unit tests, compile instrumented tests, Android Lint, and release APK build
         run: |
-          ./gradlew test lint assembleRelease \
+          ./gradlew test compileDebugAndroidTestKotlin lint assembleRelease \
             --build-cache \
             --no-daemon \
             --console=plain \

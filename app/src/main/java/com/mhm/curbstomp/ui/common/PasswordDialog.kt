@@ -5,6 +5,7 @@ import android.os.SystemClock
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.Toast
+import androidx.core.content.edit
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetDialog
@@ -12,6 +13,7 @@ import com.mhm.curbstomp.R
 import com.mhm.curbstomp.data.repository.SettingsRepository
 import com.mhm.curbstomp.databinding.DialogPasswordBinding
 import com.mhm.curbstomp.domain.PasswordHasher
+import com.mhm.curbstomp.domain.PasswordLockoutPolicy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -22,16 +24,33 @@ import kotlinx.coroutines.withContext
  *
  * - Runs PBKDF2 hashing/verification off the main thread.
  * - Transparently upgrades legacy unsalted SHA-256 hashes to salted PBKDF2 on successful unlock.
- * - Applies exponential brute-force backoff after 3 consecutive failed attempts.
+ * - Persists exponential brute-force lockout state across process restarts via [PasswordLockoutPolicy].
  */
 object PasswordDialog {
 
-    private const val MAX_FREE_ATTEMPTS = 3
-    private const val BASE_LOCKOUT_MS = 3_000L
-    private const val MAX_LOCKOUT_MS = 60_000L
+    private const val PREFS_NAME = "curbstomp_lockout"
+    private const val KEY_FAILED_ATTEMPTS = "failed_attempts"
+    private const val KEY_LOCKOUT_UNTIL_WALL_MS = "lockout_until_wall_ms"
 
-    private var failedAttempts: Int = 0
-    private var lockoutUntilElapsedMs: Long = 0L
+    @Volatile
+    private var inProcessLockoutUntilElapsedMs: Long = 0L
+
+    private fun loadLockoutState(context: Context): PasswordLockoutPolicy.LockoutState {
+        val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return PasswordLockoutPolicy.LockoutState(
+            failedAttempts = prefs.getInt(KEY_FAILED_ATTEMPTS, 0),
+            lockoutUntilWallMs = prefs.getLong(KEY_LOCKOUT_UNTIL_WALL_MS, 0L)
+        )
+    }
+
+    private fun saveLockoutState(context: Context, state: PasswordLockoutPolicy.LockoutState) {
+        context.applicationContext
+            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit {
+                putInt(KEY_FAILED_ATTEMPTS, state.failedAttempts)
+                putLong(KEY_LOCKOUT_UNTIL_WALL_MS, state.lockoutUntilWallMs)
+            }
+    }
 
     suspend fun verifyPassword(
         context: Context,
@@ -57,9 +76,14 @@ object PasswordDialog {
         }
 
         binding.btnConfirm.setOnClickListener {
-            val now = SystemClock.elapsedRealtime()
-            if (now < lockoutUntilElapsedMs) {
-                val secsLeft = ((lockoutUntilElapsedMs - now) + 999L) / 1000L
+            val currentState = loadLockoutState(context)
+            val secsLeft = PasswordLockoutPolicy.remainingLockoutSeconds(
+                state = currentState,
+                nowWallMs = System.currentTimeMillis(),
+                lockoutUntilElapsedMs = inProcessLockoutUntilElapsedMs,
+                nowElapsedMs = SystemClock.elapsedRealtime()
+            )
+            if (secsLeft > 0L) {
                 binding.tilPassword.error = context.getString(R.string.error_too_many_attempts, secsLeft)
                 return@setOnClickListener
             }
@@ -79,8 +103,8 @@ object PasswordDialog {
                 }
 
                 if (matched) {
-                    failedAttempts = 0
-                    lockoutUntilElapsedMs = 0L
+                    inProcessLockoutUntilElapsedMs = 0L
+                    saveLockoutState(context, PasswordLockoutPolicy.recordSuccess())
                     if (PasswordHasher.needsUpgrade(currentHash)) {
                         val upgraded = withContext(Dispatchers.Default) {
                             PasswordHasher.hash(pass)
@@ -92,14 +116,19 @@ object PasswordDialog {
                     }
                     onSuccess()
                 } else {
-                    failedAttempts++
+                    val outcome = PasswordLockoutPolicy.recordFailure(
+                        state = loadLockoutState(context),
+                        nowWallMs = System.currentTimeMillis()
+                    )
+                    saveLockoutState(context, outcome.nextState)
                     binding.btnConfirm.isEnabled = true
-                    if (failedAttempts >= MAX_FREE_ATTEMPTS) {
-                        val exponent = (failedAttempts - MAX_FREE_ATTEMPTS).coerceAtMost(5)
-                        val lockoutMs = (BASE_LOCKOUT_MS shl exponent).coerceAtMost(MAX_LOCKOUT_MS)
-                        lockoutUntilElapsedMs = SystemClock.elapsedRealtime() + lockoutMs
-                        val secs = lockoutMs / 1000L
-                        binding.tilPassword.error = context.getString(R.string.error_incorrect_password_wait, secs)
+                    if (outcome.lockoutSeconds > 0L) {
+                        inProcessLockoutUntilElapsedMs =
+                            SystemClock.elapsedRealtime() + outcome.lockoutSeconds * 1000L
+                        binding.tilPassword.error = context.getString(
+                            R.string.error_incorrect_password_wait,
+                            outcome.lockoutSeconds
+                        )
                     } else {
                         binding.tilPassword.error = context.getString(R.string.error_incorrect_password)
                     }

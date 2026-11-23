@@ -250,9 +250,10 @@ object RuleEngine {
         packageName: String,
         nowMillis: Long,
         addUsageMillis: Long = 0L,
-        timeZone: TimeZone = TimeZone.getDefault()
+        timeZone: TimeZone = TimeZone.getDefault(),
+        isSettingsPackage: Boolean = (packageName == "com.android.settings")
     ): EvaluationResult {
-        if (settings.extraHardenEnabled && packageName == "com.android.settings") {
+        if (settings.extraHardenEnabled && isSettingsPackage) {
             return EvaluationResult(
                 blocked = true,
                 blockReason = "Extra Harden: Settings Blocked!"

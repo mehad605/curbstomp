@@ -270,4 +270,75 @@ class RuleEngineTest {
         val secondPass = RuleEngine.pruneStaleUsage(pruned, listOf(rule), "20260316", "20260315")
         assertSame(pruned, secondPass)
     }
+
+    @Test
+    fun overnightRuleRollsOverAcrossYearBoundaryDec31ToJan1() {
+        // Dec 31, 2025 is Wednesday; Jan 1, 2026 is Thursday
+        val rule = Rule(
+            id = "nye",
+            name = "Sleep",
+            startTime = "23:00",
+            endTime = "06:00",
+            daysOfWeek = listOf(Calendar.WEDNESDAY),
+            appLimits = listOf(AppLimit("com.example.video", 0L)),
+            isWhitelist = false,
+            isActive = true
+        )
+        val jan1At2am = utcMillis(2026, 1, 1, 2, 0)
+        val eval = RuleEngine.evaluatePackage(
+            settings = Settings(rules = listOf(rule)),
+            packageName = "com.example.video",
+            nowMillis = jan1At2am,
+            timeZone = utc
+        )
+        assertTrue(eval.blocked)
+        assertEquals("20251231", RuleEngine.statsDateKeyForRule(rule, 2 * 60, "20260101", "20251231"))
+    }
+
+    @Test
+    fun extraHardenBlocksResolvedOemSettingsPackage() {
+        val settings = Settings(extraHardenEnabled = true)
+        val now = utcMillis(2026, 3, 16, 12, 0)
+
+        val oemBlocked = RuleEngine.evaluatePackage(
+            settings = settings,
+            packageName = "com.oem.customsettings",
+            nowMillis = now,
+            timeZone = utc,
+            isSettingsPackage = true
+        )
+        assertTrue(oemBlocked.blocked)
+        assertEquals("Extra Harden: Settings Blocked!", oemBlocked.blockReason)
+
+        val normalAllowed = RuleEngine.evaluatePackage(
+            settings = settings,
+            packageName = "com.example.notes",
+            nowMillis = now,
+            timeZone = utc,
+            isSettingsPackage = false
+        )
+        assertFalse(normalAllowed.blocked)
+    }
+
+    @Test
+    fun futureInstantFocusSchedulesExactWakeDelayForAffectedAppsOnly() {
+        val now = utcMillis(2026, 3, 16, 12, 0)
+        val futureFocus = InstantFocus(
+            id = "f-future",
+            startTimeMillis = now + 90_000L,
+            endTimeMillis = now + 1_890_000L,
+            appLimits = listOf(AppLimit("com.example.game", 0L)),
+            isActive = true,
+            isWhitelist = false
+        )
+        val settings = Settings(instantFocusSessions = listOf(futureFocus))
+
+        val affected = RuleEngine.evaluatePackage(settings, "com.example.game", now, timeZone = utc)
+        assertFalse(affected.blocked)
+        assertEquals(90_000L, affected.nextWakeDelayMillis)
+
+        val unaffected = RuleEngine.evaluatePackage(settings, "com.example.docs", now, timeZone = utc)
+        assertFalse(unaffected.blocked)
+        assertNull(unaffected.nextWakeDelayMillis)
+    }
 }

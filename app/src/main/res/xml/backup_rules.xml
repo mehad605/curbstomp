@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Strict allow-list: back up only settings.json (excludes crash logs & lockout prefs automatically) -->
+    <include domain="file" path="datastore/settings.json" />
+</full-backup-content>

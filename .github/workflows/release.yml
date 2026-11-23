@@ -79,8 +79,8 @@ jobs:
         with:
           cache-read-only: false
 
-      - name: Run unit tests and Android Lint
-        run: ./gradlew test lint --build-cache --no-daemon --console=plain -Dorg.gradle.jvmargs="-Xmx4g -XX:+UseParallelGC"
+      - name: Run unit tests, compile instrumented tests, and run Android Lint
+        run: ./gradlew test compileDebugAndroidTestKotlin lint --build-cache --no-daemon --console=plain -Dorg.gradle.jvmargs="-Xmx4g -XX:+UseParallelGC"
 
       - name: Upload test and lint reports on failure
         if: failure()

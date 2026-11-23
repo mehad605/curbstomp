@@ -98,7 +98,7 @@ class CurbstompService : BaseBlockingService() {
         serviceInfo = AccessibilityServiceInfo().apply {
             eventTypes = TARGET_EVENTS_MASK
             feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
-            flags = AccessibilityServiceInfo.DEFAULT
+            flags = AccessibilityServiceInfo.DEFAULT or AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
             notificationTimeout = 100
         }
 
@@ -168,7 +168,8 @@ class CurbstompService : BaseBlockingService() {
             settings = currentSettings,
             packageName = pkg,
             nowMillis = System.currentTimeMillis(),
-            addUsageMillis = elapsed
+            addUsageMillis = elapsed,
+            isSettingsPackage = packageResolver.isSettingsApp(pkg)
         )
         result.updatedUsageMap?.let { updatedUsage ->
             currentSettings = currentSettings.copy(appUsageMillis = updatedUsage)
@@ -189,7 +190,8 @@ class CurbstompService : BaseBlockingService() {
             settings = currentSettings,
             packageName = fgPackage,
             nowMillis = System.currentTimeMillis(),
-            addUsageMillis = addUsageMillis
+            addUsageMillis = addUsageMillis,
+            isSettingsPackage = packageResolver.isSettingsApp(fgPackage)
         )
 
         result.updatedUsageMap?.let { updatedUsage ->
@@ -307,7 +309,8 @@ class CurbstompService : BaseBlockingService() {
         isActivating: Boolean,
         depth: Int = 0
     ): Int {
-        var flags = SelfProtectionDetector.updateFlagsFromText(node.text, currentFlags)
+        var flags = SelfProtectionDetector.updateFlagsFromViewId(node.viewIdResourceName, currentFlags)
+        flags = SelfProtectionDetector.updateFlagsFromText(node.text, flags)
         flags = SelfProtectionDetector.updateFlagsFromText(node.contentDescription, flags)
         if (depth >= MAX_NODE_SCAN_DEPTH ||
             SelfProtectionDetector.canShortCircuit(flags, antiUninstallEnabled, isActivating)
@@ -353,13 +356,15 @@ class CurbstompService : BaseBlockingService() {
         if (pkg != null && elapsed > 0L && !packageResolver.isCriticalSystemApp(pkg)) {
             val snapshot = currentSettings
             val now = System.currentTimeMillis()
+            val isSettings = packageResolver.isSettingsApp(pkg)
             val repo = settingsRepository
             appContainer.applicationScope.launch {
                 val result = RuleEngine.evaluatePackage(
                     settings = snapshot,
                     packageName = pkg,
                     nowMillis = now,
-                    addUsageMillis = elapsed
+                    addUsageMillis = elapsed,
+                    isSettingsPackage = isSettings
                 )
                 result.updatedUsageMap?.let { repo.updateAppUsageMillis(it) }
             }

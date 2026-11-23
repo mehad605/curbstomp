@@ -40,10 +40,11 @@ app/src/main/java/com/mhm/curbstomp/
 │   ├── RuleEngine.kt            # Schedule matching (incl. overnight), usage accounting, wake-delay computation
 │   ├── StrictModePolicy.kt      # Decides when rule/focus edits weaken restrictions and require password confirmation
 │   ├── PasswordHasher.kt        # Salted PBKDF2-HMAC-SHA256 hashing, constant-time compare, legacy SHA-256 upgrade
-│   └── SelfProtectionDetector.kt# Bitmask detector for uninstall / force-stop / accessibility tamper screens
+│   ├── PasswordLockoutPolicy.kt # Persistent exponential brute-force lockout with clock-jump protection
+│   └── SelfProtectionDetector.kt# Locale-independent (viewId + className + text) anti-tamper bitmask detector
 ├── services/
 │   ├── BaseBlockingService.kt   # Shared AccessibilityService helpers (GLOBAL_ACTION_HOME + kick cooldown)
-│   ├── SystemPackageResolver.kt # Cached resolution of launcher, IME, dialer, Settings, and PackageInstaller packages
+│   ├── SystemPackageResolver.kt # Cached resolution of launcher, dialer, SMS, OEM Settings & PackageInstaller packages
 │   └── CurbstompService.kt      # Event-driven AccessibilityService (zero idle polling, exact-deadline timers)
 ├── receivers/
 │   └── CurbstompDeviceAdminReceiver.kt
@@ -55,9 +56,9 @@ app/src/main/java/com/mhm/curbstomp/
 
 ### Data Flow
 
-1. **Persistence (`data/local`)**: `SettingsStore` reads/writes `filesDir/datastore/settings.json` atomically via `AtomicFile` + a `Mutex` and exposes a hot `StateFlow<Settings>`.
+1. **Persistence (`data/local`)**: `SettingsStore` reads/writes `filesDir/datastore/settings.json` atomically via `AtomicFile` + a `Mutex` and exposes a hot `StateFlow<Settings>`. Backup rules (`res/xml/backup_rules.xml`, `res/xml/data_extraction_rules.xml`) back up `datastore/settings.json` while excluding local crash logs and lockout counters.
 2. **Mutations (`data/repository`)**: UI and services never mutate raw JSON directly — all mutations go through semantic methods on `SettingsRepository`.
-3. **Pure Rules (`domain`)**: `RuleEngine`, `StrictModePolicy`, `PasswordHasher`, and `SelfProtectionDetector` have no Android dependencies and are verified by fast JVM unit tests under `app/src/test/java/`.
+3. **Pure Rules (`domain`)**: `RuleEngine`, `StrictModePolicy`, `PasswordHasher`, `PasswordLockoutPolicy`, and `SelfProtectionDetector` have no Android dependencies and are verified by fast JVM unit tests under `app/src/test/java/`.
 4. **Enforcement (`services`)**: `CurbstompService` observes `SettingsRepository.settings` and reacts to `TYPE_WINDOW_STATE_CHANGED` / screen / time broadcasts, scheduling a single exact coroutine timer only when the foreground app has a finite remaining quota or upcoming rule transition.
 
 ---
@@ -70,8 +71,15 @@ app/src/main/java/com/mhm/curbstomp/
 # Run JVM unit tests (fast, no device/emulator required)
 ./gradlew test
 
+# Compile or run AndroidX instrumented smoke tests (connected device/emulator required to execute)
+./gradlew compileDebugAndroidTestKotlin
+./gradlew connectedDebugAndroidTest
+
 # Run Android Lint (abortOnError = true)
 ./gradlew lint
+
+# Run release-pipeline script self-tests
+bash .github/scripts/test-release-scripts.sh
 
 # Build debug APK
 ./gradlew assembleDebug

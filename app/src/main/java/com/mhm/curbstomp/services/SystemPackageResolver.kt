@@ -36,6 +36,9 @@ class SystemPackageResolver(context: Context) {
     private var selfProtectionPackages: Set<String> = STATIC_SELF_PROTECTION_PACKAGES
 
     @Volatile
+    private var settingsPackages: Set<String> = STATIC_SETTINGS_PACKAGES
+
+    @Volatile
     private var lastRefreshElapsedMs: Long = 0L
 
     companion object {
@@ -56,6 +59,8 @@ class SystemPackageResolver(context: Context) {
             "com.android.mms",
             "com.samsung.android.messaging"
         )
+
+        private val STATIC_SETTINGS_PACKAGES = setOf("com.android.settings")
 
         private val STATIC_SELF_PROTECTION_PACKAGES = setOf(
             "com.android.settings",
@@ -91,11 +96,27 @@ class SystemPackageResolver(context: Context) {
         } catch (_: Exception) {
         }
 
+        val resolvedSettings = HashSet<String>(STATIC_SETTINGS_PACKAGES)
+        try {
+            val settingsActivities = pm.queryIntentActivities(
+                Intent(AndroidSettings.ACTION_SETTINGS),
+                PackageManager.MATCH_DEFAULT_ONLY
+            )
+            for (ri in settingsActivities) {
+                val pkg = ri.activityInfo?.packageName
+                if (!pkg.isNullOrEmpty() && pkg != ownPackageName) {
+                    resolvedSettings.add(pkg)
+                }
+            }
+        } catch (_: Exception) {
+        }
+        settingsPackages = resolvedSettings
+
         val targets = HashSet<String>(STATIC_SELF_PROTECTION_PACKAGES)
+        targets.addAll(resolvedSettings)
         val selfUri = "package:$ownPackageName".toUri()
         @Suppress("DEPRECATION")
         val probeIntents = arrayOf(
-            Intent(AndroidSettings.ACTION_SETTINGS),
             Intent(AndroidSettings.ACTION_ACCESSIBILITY_SETTINGS),
             Intent(AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS, selfUri),
             Intent(Intent.ACTION_DELETE, selfUri),
@@ -115,6 +136,10 @@ class SystemPackageResolver(context: Context) {
             }
         }
         selfProtectionPackages = targets
+    }
+
+    fun isSettingsApp(packageName: String): Boolean {
+        return settingsPackages.contains(packageName)
     }
 
     fun isCriticalSystemApp(packageName: String): Boolean {

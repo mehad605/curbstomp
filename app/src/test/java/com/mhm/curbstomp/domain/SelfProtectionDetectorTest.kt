@@ -72,4 +72,52 @@ class SelfProtectionDetectorTest {
         assertFalse(SelfProtectionDetector.isWithinDeviceAdminGraceWindow(requestedAt, requestedAt + 180_000L))
         assertFalse(SelfProtectionDetector.isWithinDeviceAdminGraceWindow(requestedAt, requestedAt - 1L))
     }
+
+    @Test
+    fun blocksForceStopAndUninstallViaLocaleIndependentViewIds() {
+        // Non-English UI (e.g., Bengali / Arabic labels) where only resource IDs and app name exist
+        var flags = 0
+        flags = SelfProtectionDetector.updateFlagsFromText("Curbstomp", flags)
+        flags = SelfProtectionDetector.updateFlagsFromViewId("com.android.settings:id/force_stop_button", flags)
+        flags = SelfProtectionDetector.updateFlagsFromText("জোর করে বন্ধ করুন", flags)
+
+        assertTrue(SelfProtectionDetector.shouldBlock(flags, antiUninstallEnabled = false, isActivatingDeviceAdmin = false))
+    }
+
+    @Test
+    fun blocksPackageInstallerUninstallClassNameInAnyLocale() {
+        var flags = SelfProtectionDetector.initialFlagsForClassName("com.android.packageinstaller.UninstallerActivity")
+        flags = SelfProtectionDetector.updateFlagsFromText("com.mhm.curbstomp", flags)
+        flags = SelfProtectionDetector.updateFlagsFromText("إلغاء التثبيت؟", flags)
+
+        assertTrue(SelfProtectionDetector.shouldBlock(flags, antiUninstallEnabled = false, isActivatingDeviceAdmin = false))
+    }
+
+    @Test
+    fun blocksToggleAccessibilityServiceClassNameInAnyLocale() {
+        var flags = SelfProtectionDetector.initialFlagsForClassName(
+            "com.android.settings.accessibility.ToggleAccessibilityServicePreferenceFragment"
+        )
+        flags = SelfProtectionDetector.updateFlagsFromText("Curbstomp", flags)
+        flags = SelfProtectionDetector.updateFlagsFromText("停止しますか？", flags)
+
+        assertTrue(SelfProtectionDetector.canShortCircuit(flags, antiUninstallEnabled = false, isActivatingDeviceAdmin = false))
+        assertTrue(SelfProtectionDetector.shouldBlock(flags, antiUninstallEnabled = false, isActivatingDeviceAdmin = false))
+    }
+
+    @Test
+    fun blocksDeviceAdminAddDetailInAnyLocaleWhenActiveButAllowsSettingsList() {
+        // DeviceAdminAdd detail screen in non-English locale when anti-uninstall is already active
+        var detailFlags = SelfProtectionDetector.initialFlagsForClassName("com.android.settings.DeviceAdminAdd")
+        detailFlags = SelfProtectionDetector.updateFlagsFromText("Curbstomp", detailFlags)
+        detailFlags = SelfProtectionDetector.updateFlagsFromText("إلغاء تنشيط مسؤول الجهاز", detailFlags)
+        assertTrue(SelfProtectionDetector.shouldBlock(detailFlags, antiUninstallEnabled = true, isActivatingDeviceAdmin = false))
+        assertFalse(SelfProtectionDetector.shouldBlock(detailFlags, antiUninstallEnabled = true, isActivatingDeviceAdmin = true))
+
+        // General DeviceAdminSettings list screen listing Curbstomp alongside other apps must NOT block
+        var listFlags = SelfProtectionDetector.initialFlagsForClassName("com.android.settings.DeviceAdminSettings")
+        listFlags = SelfProtectionDetector.updateFlagsFromText("Curbstomp", listFlags)
+        listFlags = SelfProtectionDetector.updateFlagsFromText("Find My Device", listFlags)
+        assertFalse(SelfProtectionDetector.shouldBlock(listFlags, antiUninstallEnabled = true, isActivatingDeviceAdmin = false))
+    }
 }
