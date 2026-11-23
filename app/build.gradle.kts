@@ -26,6 +26,7 @@ android {
         versionCode = propVersionCode
         versionName = propVersionName
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        resourceConfigurations += listOf("en")
     }
 
 
