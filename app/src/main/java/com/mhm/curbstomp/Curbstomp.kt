@@ -7,6 +7,9 @@ import com.mhm.curbstomp.data.local.SettingsStore
 import com.mhm.curbstomp.data.repository.InstalledAppsRepository
 import com.mhm.curbstomp.data.repository.SettingsRepository
 import com.mhm.curbstomp.ui.common.AppIconLoader
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 
 /**
  * Lightweight, zero-reflection manual DI container scoped to the [Application] lifecycle.
@@ -15,6 +18,10 @@ import com.mhm.curbstomp.ui.common.AppIconLoader
 class AppContainer(context: Context) {
 
     private val appContext = context.applicationContext
+
+    val applicationScope: CoroutineScope by lazy {
+        CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    }
 
     val settingsStore: SettingsStore by lazy {
         SettingsStore(java.io.File(appContext.filesDir, "datastore/settings.json"))

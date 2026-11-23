@@ -14,6 +14,8 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Toast
 import androidx.core.content.ContextCompat
+import com.mhm.curbstomp.R
+import com.mhm.curbstomp.appContainer
 import com.mhm.curbstomp.data.models.Settings
 import com.mhm.curbstomp.domain.RuleEngine
 import com.mhm.curbstomp.domain.SelfProtectionDetector
@@ -56,6 +58,7 @@ class CurbstompService : BaseBlockingService() {
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED or AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
         private const val KICK_COOLDOWN_MS = 500L
         private const val CONTENT_SCAN_DEBOUNCE_MS = 200L
+        private const val MAX_NODE_SCAN_DEPTH = 32
     }
 
     private val systemStateReceiver = object : BroadcastReceiver() {
@@ -196,7 +199,7 @@ class CurbstompService : BaseBlockingService() {
 
         if (result.blocked) {
             sessionStartElapsedMs = 0L
-            kickUserOut(result.blockReason ?: getString(com.mhm.curbstomp.R.string.toast_blocked_default))
+            kickUserOut(result.blockReason ?: getString(R.string.toast_blocked_default))
             return
         }
 
@@ -285,9 +288,9 @@ class CurbstompService : BaseBlockingService() {
             if (SelfProtectionDetector.shouldBlock(flags, settings.antiUninstallEnabled, isActivating)) {
                 val msg = getString(
                     if (settings.antiUninstallEnabled) {
-                        com.mhm.curbstomp.R.string.toast_self_protection_full
+                        R.string.toast_self_protection_full
                     } else {
-                        com.mhm.curbstomp.R.string.toast_self_protection_standard
+                        R.string.toast_self_protection_standard
                     }
                 )
                 kickUserOut(msg, longToast = true)
@@ -301,11 +304,14 @@ class CurbstompService : BaseBlockingService() {
         node: AccessibilityNodeInfo,
         currentFlags: Int,
         antiUninstallEnabled: Boolean,
-        isActivating: Boolean
+        isActivating: Boolean,
+        depth: Int = 0
     ): Int {
         var flags = SelfProtectionDetector.updateFlagsFromText(node.text, currentFlags)
         flags = SelfProtectionDetector.updateFlagsFromText(node.contentDescription, flags)
-        if (SelfProtectionDetector.canShortCircuit(flags, antiUninstallEnabled, isActivating)) {
+        if (depth >= MAX_NODE_SCAN_DEPTH ||
+            SelfProtectionDetector.canShortCircuit(flags, antiUninstallEnabled, isActivating)
+        ) {
             return flags
         }
 
@@ -313,7 +319,7 @@ class CurbstompService : BaseBlockingService() {
         for (i in 0 until count) {
             val child = node.getChild(i) ?: continue
             try {
-                flags = scanNodeTree(child, flags, antiUninstallEnabled, isActivating)
+                flags = scanNodeTree(child, flags, antiUninstallEnabled, isActivating, depth + 1)
                 if (SelfProtectionDetector.canShortCircuit(flags, antiUninstallEnabled, isActivating)) {
                     return flags
                 }
@@ -347,14 +353,15 @@ class CurbstompService : BaseBlockingService() {
         if (pkg != null && elapsed > 0L && !packageResolver.isCriticalSystemApp(pkg)) {
             val snapshot = currentSettings
             val now = System.currentTimeMillis()
-            CoroutineScope(Dispatchers.IO).launch {
+            val repo = settingsRepository
+            appContainer.applicationScope.launch {
                 val result = RuleEngine.evaluatePackage(
                     settings = snapshot,
                     packageName = pkg,
                     nowMillis = now,
                     addUsageMillis = elapsed
                 )
-                result.updatedUsageMap?.let { settingsRepository.updateAppUsageMillis(it) }
+                result.updatedUsageMap?.let { repo.updateAppUsageMillis(it) }
             }
         }
 
