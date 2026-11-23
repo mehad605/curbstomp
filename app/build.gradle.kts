@@ -49,6 +49,9 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            vcsInfo {
+                include = false
+            }
             signingConfig = if (System.getenv("KEYSTORE_PATH") != null) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -78,6 +81,10 @@ android {
         viewBinding = true
         buildConfig = false
     }
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
+    }
     packaging {
         resources {
             excludes += setOf(
@@ -97,7 +104,10 @@ dependencies {
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
-    implementation(libs.material)
+    implementation(libs.material) {
+        // Curbstomp does not use TabLayoutMediator / ViewPager2.
+        exclude(group = "androidx.viewpager2")
+    }
     implementation(libs.androidx.activity)
     implementation(libs.androidx.lifecycle.runtime.ktx)
 
