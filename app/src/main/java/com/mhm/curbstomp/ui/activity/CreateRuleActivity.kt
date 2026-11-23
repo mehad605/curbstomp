@@ -1,6 +1,5 @@
 package com.mhm.curbstomp.ui.activity
 
-import android.app.TimePickerDialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
@@ -12,11 +11,14 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.mhm.curbstomp.data.models.AppLimit
 import com.mhm.curbstomp.data.models.Rule
 import com.mhm.curbstomp.databinding.ActivityCreateRuleBinding
+import com.mhm.curbstomp.databinding.DialogTimePickerBinding
+import com.mhm.curbstomp.databinding.DialogTimeSelectionBinding
 import com.mhm.curbstomp.databinding.ItemAppLimitBinding
 import com.mhm.curbstomp.utils.DataStoreManager
 import com.mhm.curbstomp.utils.RuleEngine
@@ -30,6 +32,7 @@ class CreateRuleActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityCreateRuleBinding
     private lateinit var dataStoreManager: DataStoreManager
+    private lateinit var appLimitAdapter: AppLimitAdapter
 
     private var startTimeStr = "00:00"
     private var endTimeStr = "23:59"
@@ -41,13 +44,13 @@ class CreateRuleActivity : AppCompatActivity() {
     private val selectAppsLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK) {
             val apps = result.data?.getStringArrayListExtra("SELECTED_APPS") ?: return@registerForActivityResult
-            val newMap = mutableMapOf<String, Long>()
+            val newMap = linkedMapOf<String, Long>()
             for (app in apps) {
                 newMap[app] = selectedAppsMap[app] ?: 0L
             }
             selectedAppsMap.clear()
             selectedAppsMap.putAll(newMap)
-            (binding.rvSelectedApps.adapter as? AppLimitAdapter)?.notifyDataSetChanged()
+            appLimitAdapter.submitEntries(selectedAppsMap.entries.map { it.key to it.value })
         }
     }
 
@@ -95,8 +98,9 @@ class CreateRuleActivity : AppCompatActivity() {
             binding.rbBlockThese.isChecked = true
         }
 
+        appLimitAdapter = AppLimitAdapter()
         binding.rvSelectedApps.layoutManager = LinearLayoutManager(this)
-        binding.rvSelectedApps.adapter = AppLimitAdapter()
+        binding.rvSelectedApps.adapter = appLimitAdapter
 
         binding.btnAddApps.setOnClickListener {
             val intent = Intent(this, SelectAppsActivity::class.java).apply {
@@ -144,7 +148,7 @@ class CreateRuleActivity : AppCompatActivity() {
                 for (limit in rule.appLimits) {
                     selectedAppsMap[limit.packageName] = limit.maxUsageMillis
                 }
-                binding.rvSelectedApps.adapter?.notifyDataSetChanged()
+                appLimitAdapter.submitEntries(selectedAppsMap.entries.map { it.key to it.value })
             }
         }
     }
@@ -155,45 +159,40 @@ class CreateRuleActivity : AppCompatActivity() {
         val m = parts.getOrNull(1)?.toIntOrNull() ?: 0
 
         val dialog = com.google.android.material.bottomsheet.BottomSheetDialog(this)
-        val dialogView = layoutInflater.inflate(com.mhm.curbstomp.R.layout.dialog_time_selection, null)
-        dialog.setContentView(dialogView)
+        val timeBinding = DialogTimeSelectionBinding.inflate(layoutInflater)
+        dialog.setContentView(timeBinding.root)
 
-        val npHours = dialogView.findViewById<android.widget.NumberPicker>(com.mhm.curbstomp.R.id.npHours)
-        val npMinutes = dialogView.findViewById<android.widget.NumberPicker>(com.mhm.curbstomp.R.id.npMinutes)
-        val npAmPm = dialogView.findViewById<android.widget.NumberPicker>(com.mhm.curbstomp.R.id.npAmPm)
-        val btnSaveTime = dialogView.findViewById<android.widget.Button>(com.mhm.curbstomp.R.id.btnSaveTime)
-
-        npHours.minValue = 1
-        npHours.maxValue = 12
+        timeBinding.npHours.minValue = 1
+        timeBinding.npHours.maxValue = 12
         
-        npMinutes.minValue = 0
-        npMinutes.maxValue = 59
-        npMinutes.setFormatter { String.format(Locale.US, "%02d", it) }
+        timeBinding.npMinutes.minValue = 0
+        timeBinding.npMinutes.maxValue = 59
+        timeBinding.npMinutes.setFormatter { String.format(Locale.US, "%02d", it) }
 
-        npAmPm.minValue = 0
-        npAmPm.maxValue = 1
-        npAmPm.displayedValues = arrayOf("AM", "PM")
+        timeBinding.npAmPm.minValue = 0
+        timeBinding.npAmPm.maxValue = 1
+        timeBinding.npAmPm.displayedValues = arrayOf("AM", "PM")
 
         // Parse 24hr to 12hr for picker initialization
         val isPm = h >= 12
-        npAmPm.value = if (isPm) 1 else 0
+        timeBinding.npAmPm.value = if (isPm) 1 else 0
 
         var displayHour = h % 12
         if (displayHour == 0) displayHour = 12
-        npHours.value = displayHour
+        timeBinding.npHours.value = displayHour
 
-        npMinutes.value = m
+        timeBinding.npMinutes.value = m
 
-        btnSaveTime.setOnClickListener {
-            val selectedIsPm = npAmPm.value == 1
-            var selectedHour = npHours.value
+        timeBinding.btnSaveTime.setOnClickListener {
+            val selectedIsPm = timeBinding.npAmPm.value == 1
+            var selectedHour = timeBinding.npHours.value
             if (selectedIsPm && selectedHour != 12) {
                 selectedHour += 12
             } else if (!selectedIsPm && selectedHour == 12) {
                 selectedHour = 0
             }
 
-            val formattedTime = String.format(Locale.US, "%02d:%02d", selectedHour, npMinutes.value)
+            val formattedTime = String.format(Locale.US, "%02d:%02d", selectedHour, timeBinding.npMinutes.value)
             onTimeSet(formattedTime)
             dialog.dismiss()
         }
@@ -367,6 +366,22 @@ class CreateRuleActivity : AppCompatActivity() {
 
     inner class AppLimitAdapter : RecyclerView.Adapter<AppLimitAdapter.ViewHolder>() {
 
+        private var items: List<Pair<String, Long>> = emptyList()
+
+        fun submitEntries(newItems: List<Pair<String, Long>>) {
+            val oldItems = items
+            val diff = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
+                override fun getOldListSize(): Int = oldItems.size
+                override fun getNewListSize(): Int = newItems.size
+                override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean =
+                    oldItems[oldItemPosition].first == newItems[newItemPosition].first
+                override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean =
+                    oldItems[oldItemPosition] == newItems[newItemPosition]
+            })
+            items = newItems
+            diff.dispatchUpdatesTo(this)
+        }
+
         inner class ViewHolder(val binding: ItemAppLimitBinding) : RecyclerView.ViewHolder(binding.root)
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -375,8 +390,7 @@ class CreateRuleActivity : AppCompatActivity() {
         }
 
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-            val packageName = selectedAppsMap.keys.elementAt(position)
-            val limitMillis = selectedAppsMap[packageName] ?: 0L
+            val (packageName, limitMillis) = items[position]
             val limitMinutes = limitMillis / 60000
 
             val (label, icon) = getAppInfo(packageName)
@@ -393,40 +407,43 @@ class CreateRuleActivity : AppCompatActivity() {
                 val pos = holder.adapterPosition
                 if (pos != RecyclerView.NO_POSITION) {
                     selectedAppsMap.remove(packageName)
+                    items = items.toMutableList().apply { removeAt(pos) }
                     notifyItemRemoved(pos)
                 }
             }
 
             holder.binding.btnSetLimit.setOnClickListener {
-                val dialogView = LayoutInflater.from(this@CreateRuleActivity).inflate(com.mhm.curbstomp.R.layout.dialog_time_picker, null)
+                val pickerBinding = DialogTimePickerBinding.inflate(layoutInflater)
                 val dialog = com.google.android.material.bottomsheet.BottomSheetDialog(this@CreateRuleActivity)
-                dialog.setContentView(dialogView)
+                dialog.setContentView(pickerBinding.root)
 
-                val npHours = dialogView.findViewById<android.widget.NumberPicker>(com.mhm.curbstomp.R.id.npHours)
-                val npMinutes = dialogView.findViewById<android.widget.NumberPicker>(com.mhm.curbstomp.R.id.npMinutes)
-                val btnFullyBlock = dialogView.findViewById<android.view.View>(com.mhm.curbstomp.R.id.btnFullyBlock)
-                val btnSaveLimit = dialogView.findViewById<android.view.View>(com.mhm.curbstomp.R.id.btnSaveLimit)
+                pickerBinding.npHours.minValue = 0
+                pickerBinding.npHours.maxValue = 23
+                pickerBinding.npHours.value = (limitMinutes / 60).toInt()
 
-                npHours.minValue = 0
-                npHours.maxValue = 23
-                npHours.value = (limitMinutes / 60).toInt()
+                pickerBinding.npMinutes.minValue = 0
+                pickerBinding.npMinutes.maxValue = 59
+                pickerBinding.npMinutes.value = (limitMinutes % 60).toInt()
 
-                npMinutes.minValue = 0
-                npMinutes.maxValue = 59
-                npMinutes.value = (limitMinutes % 60).toInt()
-
-                btnFullyBlock.setOnClickListener {
+                pickerBinding.btnFullyBlock.setOnClickListener {
                     selectedAppsMap[packageName] = 0L
                     val pos = holder.adapterPosition
-                    if (pos != RecyclerView.NO_POSITION) notifyItemChanged(pos)
+                    if (pos != RecyclerView.NO_POSITION) {
+                        items = items.toMutableList().apply { this[pos] = packageName to 0L }
+                        notifyItemChanged(pos)
+                    }
                     dialog.dismiss()
                 }
 
-                btnSaveLimit.setOnClickListener {
-                    val totalMins = (npHours.value * 60) + npMinutes.value
-                    selectedAppsMap[packageName] = totalMins * 60000L
+                pickerBinding.btnSaveLimit.setOnClickListener {
+                    val totalMins = (pickerBinding.npHours.value * 60) + pickerBinding.npMinutes.value
+                    val newMillis = totalMins * 60000L
+                    selectedAppsMap[packageName] = newMillis
                     val pos = holder.adapterPosition
-                    if (pos != RecyclerView.NO_POSITION) notifyItemChanged(pos)
+                    if (pos != RecyclerView.NO_POSITION) {
+                        items = items.toMutableList().apply { this[pos] = packageName to newMillis }
+                        notifyItemChanged(pos)
+                    }
                     dialog.dismiss()
                 }
 
@@ -434,6 +451,6 @@ class CreateRuleActivity : AppCompatActivity() {
             }
         }
 
-        override fun getItemCount(): Int = selectedAppsMap.size
+        override fun getItemCount(): Int = items.size
     }
 }

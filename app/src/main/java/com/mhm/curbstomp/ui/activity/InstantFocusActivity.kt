@@ -7,18 +7,18 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.NumberPicker
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.bottomsheet.BottomSheetDialog
-import com.mhm.curbstomp.R
 import com.mhm.curbstomp.data.models.AppLimit
 import com.mhm.curbstomp.data.models.InstantFocus
 import com.mhm.curbstomp.databinding.ActivityInstantFocusBinding
+import com.mhm.curbstomp.databinding.DialogTimePickerBinding
 import com.mhm.curbstomp.databinding.ItemAppLimitBinding
 import com.mhm.curbstomp.utils.DataStoreManager
 import com.mhm.curbstomp.utils.PasswordDialog
@@ -32,6 +32,7 @@ class InstantFocusActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityInstantFocusBinding
     private lateinit var dataStoreManager: DataStoreManager
+    private lateinit var appLimitAdapter: AppLimitAdapter
     
     private val selectedAppsMap = linkedMapOf<String, Long>()
     private val appIconCache = android.util.LruCache<String, Drawable>(48)
@@ -44,13 +45,13 @@ class InstantFocusActivity : AppCompatActivity() {
     private val selectAppsLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK) {
             val apps = result.data?.getStringArrayListExtra("SELECTED_APPS") ?: return@registerForActivityResult
-            val newMap = mutableMapOf<String, Long>()
+            val newMap = linkedMapOf<String, Long>()
             for (app in apps) {
                 newMap[app] = selectedAppsMap[app] ?: 0L
             }
             selectedAppsMap.clear()
             selectedAppsMap.putAll(newMap)
-            binding.rvSelectedApps.adapter?.notifyDataSetChanged()
+            appLimitAdapter.submitPackages(selectedAppsMap.keys.toList())
         }
     }
 
@@ -63,8 +64,9 @@ class InstantFocusActivity : AppCompatActivity() {
 
         binding.toolbar.setNavigationOnClickListener { finish() }
 
+        appLimitAdapter = AppLimitAdapter()
         binding.rvSelectedApps.layoutManager = LinearLayoutManager(this)
-        binding.rvSelectedApps.adapter = AppLimitAdapter()
+        binding.rvSelectedApps.adapter = appLimitAdapter
 
         binding.btnAddApps.setOnClickListener {
             val intent = Intent(this, SelectAppsActivity::class.java).apply {
@@ -105,28 +107,23 @@ class InstantFocusActivity : AppCompatActivity() {
     }
 
     private fun showDurationPicker() {
-        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_time_picker, null)
+        val pickerBinding = DialogTimePickerBinding.inflate(layoutInflater)
         val dialog = BottomSheetDialog(this)
-        dialog.setContentView(dialogView)
-
-        val npHours = dialogView.findViewById<NumberPicker>(R.id.npHours)
-        val npMinutes = dialogView.findViewById<NumberPicker>(R.id.npMinutes)
-        val btnFullyBlock = dialogView.findViewById<View>(R.id.btnFullyBlock)
-        val btnSaveLimit = dialogView.findViewById<View>(R.id.btnSaveLimit)
+        dialog.setContentView(pickerBinding.root)
         
         // Hide fully block button since it makes no sense here
-        btnFullyBlock.visibility = View.GONE
+        pickerBinding.btnFullyBlock.visibility = View.GONE
 
-        npHours.minValue = 0
-        npHours.maxValue = 23
-        npHours.value = (durationMins / 60).toInt()
+        pickerBinding.npHours.minValue = 0
+        pickerBinding.npHours.maxValue = 23
+        pickerBinding.npHours.value = (durationMins / 60).toInt()
 
-        npMinutes.minValue = 0
-        npMinutes.maxValue = 59
-        npMinutes.value = (durationMins % 60).toInt()
+        pickerBinding.npMinutes.minValue = 0
+        pickerBinding.npMinutes.maxValue = 59
+        pickerBinding.npMinutes.value = (durationMins % 60).toInt()
 
-        btnSaveLimit.setOnClickListener {
-            val totalMins = (npHours.value * 60) + npMinutes.value
+        pickerBinding.btnSaveLimit.setOnClickListener {
+            val totalMins = (pickerBinding.npHours.value * 60) + pickerBinding.npMinutes.value
             updateDurationDisplay(totalMins.toLong())
             dialog.dismiss()
         }
@@ -168,7 +165,7 @@ class InstantFocusActivity : AppCompatActivity() {
                 for (limit in focus.appLimits) {
                     selectedAppsMap[limit.packageName] = 0L // Ignore old limits
                 }
-                binding.rvSelectedApps.adapter?.notifyDataSetChanged()
+                appLimitAdapter.submitPackages(selectedAppsMap.keys.toList())
             }
         }
     }
@@ -284,6 +281,22 @@ class InstantFocusActivity : AppCompatActivity() {
 
     inner class AppLimitAdapter : RecyclerView.Adapter<AppLimitAdapter.ViewHolder>() {
 
+        private var items: List<String> = emptyList()
+
+        fun submitPackages(newItems: List<String>) {
+            val oldItems = items
+            val diff = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
+                override fun getOldListSize(): Int = oldItems.size
+                override fun getNewListSize(): Int = newItems.size
+                override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean =
+                    oldItems[oldItemPosition] == newItems[newItemPosition]
+                override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean =
+                    oldItems[oldItemPosition] == newItems[newItemPosition]
+            })
+            items = newItems
+            diff.dispatchUpdatesTo(this)
+        }
+
         inner class ViewHolder(val binding: ItemAppLimitBinding) : RecyclerView.ViewHolder(binding.root)
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -292,7 +305,7 @@ class InstantFocusActivity : AppCompatActivity() {
         }
 
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-            val packageName = selectedAppsMap.keys.elementAt(position)
+            val packageName = items[position]
 
             val (label, icon) = getAppInfo(packageName)
             holder.binding.tvAppName.text = label
@@ -305,11 +318,12 @@ class InstantFocusActivity : AppCompatActivity() {
                 val pos = holder.adapterPosition
                 if (pos != RecyclerView.NO_POSITION) {
                     selectedAppsMap.remove(packageName)
+                    items = items.toMutableList().apply { removeAt(pos) }
                     notifyItemRemoved(pos)
                 }
             }
         }
 
-        override fun getItemCount(): Int = selectedAppsMap.size
+        override fun getItemCount(): Int = items.size
     }
 }

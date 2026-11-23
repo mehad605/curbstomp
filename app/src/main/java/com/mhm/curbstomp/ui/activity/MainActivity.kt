@@ -689,30 +689,24 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showCustomAddFocusTimePicker(focus: InstantFocus) {
-        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_time_picker, null)
+        val pickerBinding = com.mhm.curbstomp.databinding.DialogTimePickerBinding.inflate(layoutInflater)
         val dialog = BottomSheetDialog(this)
-        dialog.setContentView(dialogView)
+        dialog.setContentView(pickerBinding.root)
 
-        val tvPickerTitle = dialogView.findViewById<TextView>(R.id.tvPickerTitle)
-        val npHours = dialogView.findViewById<NumberPicker>(R.id.npHours)
-        val npMinutes = dialogView.findViewById<NumberPicker>(R.id.npMinutes)
-        val btnFullyBlock = dialogView.findViewById<View>(R.id.btnFullyBlock)
-        val btnSaveLimit = dialogView.findViewById<MaterialButton>(R.id.btnSaveLimit)
+        pickerBinding.tvPickerTitle.text = "ADD TIME"
+        pickerBinding.btnFullyBlock.visibility = View.GONE
+        pickerBinding.btnSaveLimit.text = "ADD TIME"
 
-        tvPickerTitle.text = "ADD TIME"
-        btnFullyBlock.visibility = View.GONE
-        btnSaveLimit.text = "ADD TIME"
+        pickerBinding.npHours.minValue = 0
+        pickerBinding.npHours.maxValue = 23
+        pickerBinding.npHours.value = 0
 
-        npHours.minValue = 0
-        npHours.maxValue = 23
-        npHours.value = 0
+        pickerBinding.npMinutes.minValue = 0
+        pickerBinding.npMinutes.maxValue = 59
+        pickerBinding.npMinutes.value = 15
 
-        npMinutes.minValue = 0
-        npMinutes.maxValue = 59
-        npMinutes.value = 15
-
-        btnSaveLimit.setOnClickListener {
-            val totalMins = (npHours.value * 60) + npMinutes.value
+        pickerBinding.btnSaveLimit.setOnClickListener {
+            val totalMins = (pickerBinding.npHours.value * 60) + pickerBinding.npMinutes.value
             if (totalMins > 0) {
                 addFocusTime(focus, totalMins.toLong())
             }

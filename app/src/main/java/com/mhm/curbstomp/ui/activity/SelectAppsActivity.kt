@@ -1,17 +1,15 @@
 package com.mhm.curbstomp.ui.activity
 
-import android.annotation.SuppressLint
 import android.content.Intent
-import android.content.pm.ApplicationInfo
-import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
 import android.os.Bundle
+import android.util.LruCache
 import android.view.LayoutInflater
 import android.view.ViewGroup
-import android.util.LruCache
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SearchView
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.mhm.curbstomp.databinding.ActivitySelectAppsBinding
@@ -27,8 +25,8 @@ class SelectAppsActivity : AppCompatActivity() {
     private lateinit var binding: ActivitySelectAppsBinding
     private lateinit var selectedApps: HashSet<String>
     private var allApps: List<AppItem> = emptyList()
-    private var filteredApps: List<AppItem> = emptyList()
     private val iconCache = LruCache<String, Drawable>(48)
+    private lateinit var appAdapter: AppAdapter
 
     data class AppItem(
         val label: String,
@@ -46,12 +44,13 @@ class SelectAppsActivity : AppCompatActivity() {
         val preSelected = intent.getStringArrayListExtra("PRE_SELECTED_APPS") ?: emptyList()
         selectedApps = HashSet(preSelected)
 
+        appAdapter = AppAdapter()
         binding.appList.layoutManager = LinearLayoutManager(this)
+        binding.appList.adapter = appAdapter
 
         lifecycleScope.launch {
             loadApps()
             setupSearch()
-            setupAdapter()
         }
 
         binding.btnConfirm.setOnClickListener {
@@ -68,10 +67,12 @@ class SelectAppsActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
-    private suspend fun loadApps() = withContext(Dispatchers.Default) {
-        val uniqueList = com.mhm.curbstomp.utils.AppCache.getApps(this@SelectAppsActivity)
+    private suspend fun loadApps() {
+        val uniqueList = withContext(Dispatchers.Default) {
+            com.mhm.curbstomp.utils.AppCache.getApps(this@SelectAppsActivity)
+        }
         allApps = uniqueList
-        filteredApps = uniqueList
+        appAdapter.submitList(uniqueList)
     }
 
     private fun setupSearch() {
@@ -86,23 +87,35 @@ class SelectAppsActivity : AppCompatActivity() {
     }
 
     private fun filterList(query: String?) {
-        if (query.isNullOrBlank()) {
-            filteredApps = allApps
+        val nextList = if (query.isNullOrBlank()) {
+            allApps
         } else {
             val lowerQuery = query.lowercase(Locale.ROOT)
-            filteredApps = allApps.filter {
+            allApps.filter {
                 it.label.lowercase(Locale.ROOT).contains(lowerQuery) ||
                     it.packageName.lowercase(Locale.ROOT).contains(lowerQuery)
             }
         }
-        (binding.appList.adapter as? AppAdapter)?.notifyDataSetChanged()
-    }
-
-    private fun setupAdapter() {
-        binding.appList.adapter = AppAdapter()
+        appAdapter.submitList(nextList)
     }
 
     inner class AppAdapter : RecyclerView.Adapter<AppAdapter.ViewHolder>() {
+
+        private var items: List<AppItem> = emptyList()
+
+        fun submitList(newItems: List<AppItem>) {
+            val oldItems = items
+            val diff = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
+                override fun getOldListSize(): Int = oldItems.size
+                override fun getNewListSize(): Int = newItems.size
+                override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean =
+                    oldItems[oldItemPosition].packageName == newItems[newItemPosition].packageName
+                override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean =
+                    oldItems[oldItemPosition] == newItems[newItemPosition]
+            })
+            items = newItems
+            diff.dispatchUpdatesTo(this)
+        }
 
         inner class ViewHolder(val itemBinding: SelectAppsItemBinding) :
             RecyclerView.ViewHolder(itemBinding.root) {
@@ -121,7 +134,7 @@ class SelectAppsActivity : AppCompatActivity() {
         }
 
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-            val app = filteredApps[position]
+            val app = items[position]
             holder.itemBinding.tvAppName.text = app.label
 
             holder.iconJob?.cancel()
@@ -165,6 +178,6 @@ class SelectAppsActivity : AppCompatActivity() {
             }
         }
 
-        override fun getItemCount(): Int = filteredApps.size
+        override fun getItemCount(): Int = items.size
     }
 }
