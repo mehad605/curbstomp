@@ -30,22 +30,12 @@
     
     <color name="md_theme_outline">#8e9192</color>
     <color name="md_theme_outlineVariant">#27272A</color>
-    
-    <color name="md_theme_surfaceContainerLowest">#09090B</color>
-    <color name="md_theme_surfaceDim">#131316</color>
-    <color name="md_theme_scrim">#0e0e11</color>
 
     <color name="md_theme_error">#ffb4ab</color>
     <color name="md_theme_onError">#690005</color>
     <color name="md_theme_errorContainer">#93000a</color>
     <color name="md_theme_onErrorContainer">#ffdad6</color>
 
-    <!-- Semantic / Legacy -->
-    <color name="error_color">#ffb4ab</color>
-    <color name="text_color">#FFFFFF</color>
+    <!-- Splash -->
     <color name="splash_background">#09090B</color>
-
-    <color name="status_active">#FFFFFF</color>
-    <color name="status_active_bg">#18181B</color>
-    <color name="status_active_border">#3F3F46</color>
 </resources>

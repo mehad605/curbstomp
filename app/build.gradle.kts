@@ -1,5 +1,4 @@
 import java.util.Locale
-import java.io.ByteArrayOutputStream
 
 plugins {
     alias(libs.plugins.android.application)
@@ -77,7 +76,18 @@ android {
     }
     buildFeatures {
         viewBinding = true
-        buildConfig = true
+        buildConfig = false
+    }
+    packaging {
+        resources {
+            excludes += setOf(
+                "DebugProbesKt.bin",
+                "kotlin-tooling-metadata.json",
+                "kotlin/**",
+                "META-INF/*.version",
+                "META-INF/androidx/**"
+            )
+        }
     }
 }
 

@@ -19,7 +19,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
-import com.mhm.curbstomp.utils.AppFilter
 
 class SelectAppsActivity : AppCompatActivity() {
 
