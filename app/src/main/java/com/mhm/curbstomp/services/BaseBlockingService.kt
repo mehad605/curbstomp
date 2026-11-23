@@ -31,20 +31,17 @@ open class BaseBlockingService : AccessibilityService() {
     }
 
 
-    fun isDelayOver(lastTimestamp: Long, delay: Int): Boolean {
-        val currentTime = SystemClock.uptimeMillis().toFloat()
-        return currentTime - lastTimestamp > delay
+    fun isDelayOver(lastTimestamp: Long, delay: Long): Boolean {
+        return SystemClock.uptimeMillis() - lastTimestamp > delay
     }
 
     fun pressHome() {
         performGlobalAction(GLOBAL_ACTION_HOME)
         lastBackPressTimeStamp = SystemClock.uptimeMillis()
-
     }
 
     fun pressBack() {
-            performGlobalAction(GLOBAL_ACTION_BACK)
-            lastBackPressTimeStamp = SystemClock.uptimeMillis()
-
+        performGlobalAction(GLOBAL_ACTION_BACK)
+        lastBackPressTimeStamp = SystemClock.uptimeMillis()
     }
 }
