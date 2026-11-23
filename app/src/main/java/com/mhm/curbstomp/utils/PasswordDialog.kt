@@ -4,18 +4,23 @@ import android.content.Context
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.Toast
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.mhm.curbstomp.databinding.DialogPasswordBinding
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.security.MessageDigest
+import java.util.Locale
 
 object PasswordDialog {
 
     private fun hashPassword(password: String): String {
         val digest = MessageDigest.getInstance("SHA-256")
         val hashBytes = digest.digest(password.toByteArray(Charsets.UTF_8))
-        return hashBytes.joinToString("") { "%02x".format(it) }
+        return hashBytes.joinToString("") { String.format(Locale.US, "%02x", it) }
     }
 
     suspend fun verifyPassword(context: Context, dataStoreManager: DataStoreManager, onSuccess: () -> Unit) {
@@ -93,10 +98,14 @@ object PasswordDialog {
                 return@setOnClickListener
             }
 
-            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                dataStoreManager.updatePasswordHash(hashPassword(pass))
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                    Toast.makeText(context, "Password updated successfully", Toast.LENGTH_SHORT).show()
+            val hashed = hashPassword(pass)
+            val owner = context as? LifecycleOwner
+            owner?.lifecycleScope?.launch {
+                withContext(Dispatchers.IO) {
+                    dataStoreManager.updatePasswordHash(hashed)
+                }
+                Toast.makeText(context, "Password updated successfully", Toast.LENGTH_SHORT).show()
+                if (dialog.isShowing) {
                     dialog.dismiss()
                 }
             }

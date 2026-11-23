@@ -33,8 +33,8 @@ class InstantFocusActivity : AppCompatActivity() {
     private lateinit var binding: ActivityInstantFocusBinding
     private lateinit var dataStoreManager: DataStoreManager
     
-    private val selectedAppsMap = mutableMapOf<String, Long>()
-    private val appIconCache = mutableMapOf<String, Drawable>()
+    private val selectedAppsMap = linkedMapOf<String, Long>()
+    private val appIconCache = android.util.LruCache<String, Drawable>(48)
     private val appLabelCache = mutableMapOf<String, String>()
 
     private var durationMins = 0L
@@ -257,9 +257,17 @@ class InstantFocusActivity : AppCompatActivity() {
         }
     }
 
+    override fun onDestroy() {
+        appIconCache.evictAll()
+        appLabelCache.clear()
+        super.onDestroy()
+    }
+
     private fun getAppInfo(packageName: String): Pair<String, Drawable?> {
-        if (appLabelCache.containsKey(packageName)) {
-            return Pair(appLabelCache[packageName]!!, appIconCache[packageName])
+        val cachedLabel = appLabelCache[packageName]
+        val cachedIcon = appIconCache.get(packageName)
+        if (cachedLabel != null && cachedIcon != null) {
+            return Pair(cachedLabel, cachedIcon)
         }
         return try {
             val pm = packageManager
@@ -267,9 +275,9 @@ class InstantFocusActivity : AppCompatActivity() {
             val label = pm.getApplicationLabel(info).toString()
             val icon = pm.getApplicationIcon(info)
             appLabelCache[packageName] = label
-            appIconCache[packageName] = icon
+            appIconCache.put(packageName, icon)
             Pair(label, icon)
-        } catch (e: PackageManager.NameNotFoundException) {
+        } catch (_: PackageManager.NameNotFoundException) {
             Pair(packageName, null)
         }
     }
@@ -285,17 +293,20 @@ class InstantFocusActivity : AppCompatActivity() {
 
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val packageName = selectedAppsMap.keys.elementAt(position)
-            
+
             val (label, icon) = getAppInfo(packageName)
             holder.binding.tvAppName.text = label
             holder.binding.ivAppIcon.setImageDrawable(icon)
-            
+
             holder.binding.tvAppLimit.visibility = View.GONE
-            holder.binding.btnSetLimit.visibility = View.GONE // Removed individual limits here
+            holder.binding.btnSetLimit.visibility = View.GONE
 
             holder.binding.btnRemove.setOnClickListener {
-                selectedAppsMap.remove(packageName)
-                notifyDataSetChanged()
+                val pos = holder.adapterPosition
+                if (pos != RecyclerView.NO_POSITION) {
+                    selectedAppsMap.remove(packageName)
+                    notifyItemRemoved(pos)
+                }
             }
         }
 

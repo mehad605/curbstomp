@@ -5,13 +5,11 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
 import android.os.Bundle
-import android.text.InputType
+import android.util.LruCache
 import android.view.LayoutInflater
 import android.view.ViewGroup
-import android.widget.EditText
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -21,23 +19,23 @@ import com.mhm.curbstomp.data.models.Rule
 import com.mhm.curbstomp.databinding.ActivityCreateRuleBinding
 import com.mhm.curbstomp.databinding.ItemAppLimitBinding
 import com.mhm.curbstomp.utils.DataStoreManager
+import com.mhm.curbstomp.utils.RuleEngine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Locale
 import java.util.Calendar
+import java.util.Locale
 import java.util.UUID
 
 class CreateRuleActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityCreateRuleBinding
     private lateinit var dataStoreManager: DataStoreManager
-    
+
     private var startTimeStr = "00:00"
     private var endTimeStr = "23:59"
-    private val selectedAppsMap = mutableMapOf<String, Long>()
-    
-    private val appIconCache = mutableMapOf<String, Drawable>()
+    private val selectedAppsMap = linkedMapOf<String, Long>()
+
+    private val appIconCache = LruCache<String, Drawable>(48)
     private val appLabelCache = mutableMapOf<String, String>()
 
     private val selectAppsLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -170,7 +168,7 @@ class CreateRuleActivity : AppCompatActivity() {
         
         npMinutes.minValue = 0
         npMinutes.maxValue = 59
-        npMinutes.setFormatter { String.format("%02d", it) }
+        npMinutes.setFormatter { String.format(Locale.US, "%02d", it) }
 
         npAmPm.minValue = 0
         npAmPm.maxValue = 1
@@ -179,11 +177,11 @@ class CreateRuleActivity : AppCompatActivity() {
         // Parse 24hr to 12hr for picker initialization
         val isPm = h >= 12
         npAmPm.value = if (isPm) 1 else 0
-        
+
         var displayHour = h % 12
         if (displayHour == 0) displayHour = 12
         npHours.value = displayHour
-        
+
         npMinutes.value = m
 
         btnSaveTime.setOnClickListener {
@@ -195,7 +193,7 @@ class CreateRuleActivity : AppCompatActivity() {
                 selectedHour = 0
             }
 
-            val formattedTime = String.format("%02d:%02d", selectedHour, npMinutes.value)
+            val formattedTime = String.format(Locale.US, "%02d:%02d", selectedHour, npMinutes.value)
             onTimeSet(formattedTime)
             dialog.dismiss()
         }
@@ -204,14 +202,15 @@ class CreateRuleActivity : AppCompatActivity() {
     }
 
     private fun formatTime12Hour(time24: String): String {
-        return try {
-            val sdf24 = SimpleDateFormat("HH:mm", Locale.getDefault())
-            val sdf12 = SimpleDateFormat("hh:mm a", Locale.getDefault())
-            val date = sdf24.parse(time24)
-            if (date != null) sdf12.format(date) else time24
-        } catch (e: Exception) {
-            time24
+        val totalMin = RuleEngine.parseTimeToMinutes(time24) ?: return time24
+        val hour24 = totalMin / 60
+        val minute = totalMin % 60
+        val amPm = if (hour24 >= 12) "PM" else "AM"
+        val hour12 = when (val h = hour24 % 12) {
+            0 -> 12
+            else -> h
         }
+        return String.format(Locale.US, "%02d:%02d %s", hour12, minute, amPm)
     }
 
     private fun getSelectedDays(): List<Int> {
@@ -341,9 +340,17 @@ class CreateRuleActivity : AppCompatActivity() {
         }
     }
 
+    override fun onDestroy() {
+        appIconCache.evictAll()
+        appLabelCache.clear()
+        super.onDestroy()
+    }
+
     private fun getAppInfo(packageName: String): Pair<String, Drawable?> {
-        if (appLabelCache.containsKey(packageName)) {
-            return Pair(appLabelCache[packageName]!!, appIconCache[packageName])
+        val cachedLabel = appLabelCache[packageName]
+        val cachedIcon = appIconCache.get(packageName)
+        if (cachedLabel != null && cachedIcon != null) {
+            return Pair(cachedLabel, cachedIcon)
         }
         return try {
             val pm = packageManager
@@ -351,9 +358,9 @@ class CreateRuleActivity : AppCompatActivity() {
             val label = pm.getApplicationLabel(info).toString()
             val icon = pm.getApplicationIcon(info)
             appLabelCache[packageName] = label
-            appIconCache[packageName] = icon
+            appIconCache.put(packageName, icon)
             Pair(label, icon)
-        } catch (e: PackageManager.NameNotFoundException) {
+        } catch (_: PackageManager.NameNotFoundException) {
             Pair(packageName, null)
         }
     }
@@ -375,7 +382,7 @@ class CreateRuleActivity : AppCompatActivity() {
             val (label, icon) = getAppInfo(packageName)
             holder.binding.tvAppName.text = label
             holder.binding.ivAppIcon.setImageDrawable(icon)
-            
+
             if (limitMinutes == 0L) {
                 holder.binding.tvAppLimit.text = "Blocked (0 min)"
             } else {
@@ -383,8 +390,11 @@ class CreateRuleActivity : AppCompatActivity() {
             }
 
             holder.binding.btnRemove.setOnClickListener {
-                selectedAppsMap.remove(packageName)
-                notifyDataSetChanged()
+                val pos = holder.adapterPosition
+                if (pos != RecyclerView.NO_POSITION) {
+                    selectedAppsMap.remove(packageName)
+                    notifyItemRemoved(pos)
+                }
             }
 
             holder.binding.btnSetLimit.setOnClickListener {
@@ -407,14 +417,16 @@ class CreateRuleActivity : AppCompatActivity() {
 
                 btnFullyBlock.setOnClickListener {
                     selectedAppsMap[packageName] = 0L
-                    notifyItemChanged(position)
+                    val pos = holder.adapterPosition
+                    if (pos != RecyclerView.NO_POSITION) notifyItemChanged(pos)
                     dialog.dismiss()
                 }
 
                 btnSaveLimit.setOnClickListener {
                     val totalMins = (npHours.value * 60) + npMinutes.value
                     selectedAppsMap[packageName] = totalMins * 60000L
-                    notifyItemChanged(position)
+                    val pos = holder.adapterPosition
+                    if (pos != RecyclerView.NO_POSITION) notifyItemChanged(pos)
                     dialog.dismiss()
                 }
 

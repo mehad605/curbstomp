@@ -8,6 +8,7 @@ import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.ViewGroup
+import android.util.LruCache
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SearchView
 import androidx.lifecycle.lifecycleScope
@@ -16,6 +17,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.mhm.curbstomp.databinding.ActivitySelectAppsBinding
 import com.mhm.curbstomp.databinding.SelectAppsItemBinding
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
@@ -26,6 +28,7 @@ class SelectAppsActivity : AppCompatActivity() {
     private lateinit var selectedApps: HashSet<String>
     private var allApps: List<AppItem> = emptyList()
     private var filteredApps: List<AppItem> = emptyList()
+    private val iconCache = LruCache<String, Drawable>(48)
 
     data class AppItem(
         val label: String,
@@ -60,12 +63,16 @@ class SelectAppsActivity : AppCompatActivity() {
         }
     }
 
+    override fun onDestroy() {
+        iconCache.evictAll()
+        super.onDestroy()
+    }
+
     private suspend fun loadApps() = withContext(Dispatchers.Default) {
-        val uniqueList = com.mhm.curbstomp.utils.AppCache.getApps(this@SelectAppsActivity).toMutableList()
+        val uniqueList = com.mhm.curbstomp.utils.AppCache.getApps(this@SelectAppsActivity)
         allApps = uniqueList
         filteredApps = uniqueList
     }
-
 
     private fun setupSearch() {
         binding.searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
@@ -84,8 +91,8 @@ class SelectAppsActivity : AppCompatActivity() {
         } else {
             val lowerQuery = query.lowercase(Locale.ROOT)
             filteredApps = allApps.filter {
-                it.label.lowercase(Locale.ROOT).contains(lowerQuery) || 
-                it.packageName.lowercase(Locale.ROOT).contains(lowerQuery)
+                it.label.lowercase(Locale.ROOT).contains(lowerQuery) ||
+                    it.packageName.lowercase(Locale.ROOT).contains(lowerQuery)
             }
         }
         (binding.appList.adapter as? AppAdapter)?.notifyDataSetChanged()
@@ -97,24 +104,48 @@ class SelectAppsActivity : AppCompatActivity() {
 
     inner class AppAdapter : RecyclerView.Adapter<AppAdapter.ViewHolder>() {
 
-        inner class ViewHolder(val itemBinding: SelectAppsItemBinding) : RecyclerView.ViewHolder(itemBinding.root)
+        inner class ViewHolder(val itemBinding: SelectAppsItemBinding) :
+            RecyclerView.ViewHolder(itemBinding.root) {
+            var iconJob: Job? = null
+        }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
             val itemBinding = SelectAppsItemBinding.inflate(LayoutInflater.from(parent.context), parent, false)
             return ViewHolder(itemBinding)
         }
 
+        override fun onViewRecycled(holder: ViewHolder) {
+            holder.iconJob?.cancel()
+            holder.iconJob = null
+            super.onViewRecycled(holder)
+        }
+
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val app = filteredApps[position]
             holder.itemBinding.tvAppName.text = app.label
-            
-            holder.itemBinding.ivAppIcon.setImageDrawable(null)
+
+            holder.iconJob?.cancel()
+            holder.iconJob = null
             holder.itemBinding.ivAppIcon.tag = app.packageName
-            lifecycleScope.launch(Dispatchers.Default) {
-                val icon = try { packageManager.getApplicationIcon(app.packageName) } catch(e: Exception) { null }
-                withContext(Dispatchers.Main) {
-                    if (holder.itemBinding.ivAppIcon.tag == app.packageName && icon != null) {
-                        holder.itemBinding.ivAppIcon.setImageDrawable(icon)
+
+            val cached = iconCache.get(app.packageName)
+            if (cached != null) {
+                holder.itemBinding.ivAppIcon.setImageDrawable(cached)
+            } else {
+                holder.itemBinding.ivAppIcon.setImageDrawable(null)
+                holder.iconJob = lifecycleScope.launch(Dispatchers.Default) {
+                    val icon = try {
+                        packageManager.getApplicationIcon(app.packageName)
+                    } catch (_: Exception) {
+                        null
+                    }
+                    if (icon != null) {
+                        iconCache.put(app.packageName, icon)
+                        withContext(Dispatchers.Main) {
+                            if (holder.itemBinding.ivAppIcon.tag == app.packageName) {
+                                holder.itemBinding.ivAppIcon.setImageDrawable(icon)
+                            }
+                        }
                     }
                 }
             }
@@ -127,7 +158,10 @@ class SelectAppsActivity : AppCompatActivity() {
                 } else {
                     selectedApps.add(app.packageName)
                 }
-                notifyItemChanged(position)
+                val pos = holder.adapterPosition
+                if (pos != RecyclerView.NO_POSITION) {
+                    notifyItemChanged(pos)
+                }
             }
         }
 
