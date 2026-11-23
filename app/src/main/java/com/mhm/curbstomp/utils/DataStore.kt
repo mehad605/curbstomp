@@ -275,7 +275,16 @@ class DataStoreManager(context: Context) {
     }
 
     suspend fun updateRules(rules: List<Rule>) {
-        store.updateData { it.copy(rules = rules) }
+        val (todayKey, yesterdayKey) = RuleEngine.dateKeysFor(System.currentTimeMillis())
+        store.updateData { current ->
+            val prunedUsage = RuleEngine.pruneStaleUsage(
+                current.appUsageMillis,
+                rules,
+                todayKey,
+                yesterdayKey
+            )
+            current.copy(rules = rules, appUsageMillis = prunedUsage)
+        }
     }
 
     suspend fun updateInstantFocusSessions(sessions: List<InstantFocus>) {

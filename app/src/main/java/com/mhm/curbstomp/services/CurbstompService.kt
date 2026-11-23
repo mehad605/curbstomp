@@ -12,11 +12,8 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import com.mhm.curbstomp.CrashLogger
 import com.mhm.curbstomp.data.models.Settings
-import com.mhm.curbstomp.utils.DataStoreManager
-import java.util.Calendar
+import com.mhm.curbstomp.utils.RuleEngine
 import java.util.Locale
-import java.text.SimpleDateFormat
-import java.util.Date
 
 class CurbstompService : BaseBlockingService() {
 
@@ -66,9 +63,8 @@ class CurbstompService : BaseBlockingService() {
 
     private suspend fun cleanupExpiredInstantFocus(settings: Settings) {
         val currentTime = System.currentTimeMillis()
-        val expired = settings.instantFocusSessions.filter { currentTime > it.endTimeMillis }
-        if (expired.isNotEmpty()) {
-            val active = settings.instantFocusSessions.filter { currentTime <= it.endTimeMillis }
+        val active = RuleEngine.pruneExpiredInstantFocus(settings.instantFocusSessions, currentTime)
+        if (active !== settings.instantFocusSessions) {
             dataStoreManager.updateInstantFocusSessions(active)
         }
     }
@@ -125,128 +121,24 @@ class CurbstompService : BaseBlockingService() {
     // Returns true if blocked
     private suspend fun checkLimits(fgPackage: String, addUsage: Long = 0L): Boolean {
         if (isCriticalSystemApp(fgPackage)) return false
-        
-        if (currentSettings.extraHardenEnabled && fgPackage == "com.android.settings") {
-            kickUserOut("Extra Harden: Settings Blocked!")
+
+        val result = RuleEngine.evaluatePackage(
+            settings = currentSettings,
+            packageName = fgPackage,
+            nowMillis = System.currentTimeMillis(),
+            addUsageMillis = addUsage
+        )
+
+        if (result.updatedUsageMap != null) {
+            dataStoreManager.updateAppUsageMillis(result.updatedUsageMap)
+        }
+
+        if (result.blocked) {
+            kickUserOut(result.blockReason ?: "Blocked!")
             return true
         }
 
-        val calendar = Calendar.getInstance()
-        val currentDay = calendar.get(Calendar.DAY_OF_WEEK)
-        val currentTimeStr = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
-        val currentTimeMillis = System.currentTimeMillis()
-        val dateStr = SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Date())
-
-        var kicked = false
-        var usageMap = currentSettings.appUsageMillis.toMutableMap()
-        var updated = false
-
-        // 1. Check Instant Focus
-        for (focus in currentSettings.instantFocusSessions) {
-            if (focus.isActive && currentTimeMillis in focus.startTimeMillis..focus.endTimeMillis) {
-                val inList = focus.appLimits.any { it.packageName == fgPackage }
-                val shouldBlock = if (focus.isWhitelist) !inList else inList
-                
-                if (shouldBlock) {
-                    kickUserOut(if (focus.isWhitelist) "Instant Focus: App Not Allowed!" else "Instant Focus: Blocked!")
-                    kicked = true
-                    break
-                }
-            }
-        }
-
-        if (kicked) {
-            if (updated) dataStoreManager.updateAppUsageMillis(usageMap)
-            return true
-        }
-
-        // 2. Check Rules
-        val prevDay = if (currentDay == 1) 7 else currentDay - 1
-
-        for (rule in currentSettings.rules) {
-            if (!rule.isActive) continue
-
-            val crossesMidnight = rule.startTime > rule.endTime
-            var ruleActiveNow = false
-
-            if (crossesMidnight) {
-                if (currentTimeStr >= rule.startTime && rule.daysOfWeek.contains(currentDay)) {
-                    ruleActiveNow = true
-                } else if (currentTimeStr <= rule.endTime && rule.daysOfWeek.contains(prevDay)) {
-                    ruleActiveNow = true
-                }
-            } else {
-                if (rule.startTime == rule.endTime) {
-                     // 24 hours rule
-                     if (rule.daysOfWeek.contains(currentDay)) ruleActiveNow = true
-                } else if (currentTimeStr in rule.startTime..rule.endTime && rule.daysOfWeek.contains(currentDay)) {
-                    ruleActiveNow = true
-                }
-            }
-
-            if (ruleActiveNow) {
-                val activeDateStr = if (crossesMidnight && currentTimeStr <= rule.endTime) {
-                    val cal = Calendar.getInstance()
-                    cal.add(Calendar.DAY_OF_YEAR, -1)
-                    SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(cal.time)
-                } else {
-                    dateStr
-                }
-                
-                val appLimit = rule.appLimits.find { it.packageName == fgPackage }
-                
-                if (rule.isWhitelist) {
-                    if (appLimit == null) {
-                        kickUserOut("Rule ${rule.name}: App Not Allowed!")
-                        kicked = true
-                        break
-                    } else {
-                        val key = "${rule.id}_${activeDateStr}_$fgPackage"
-                        var usedMillis = usageMap[key] ?: 0L
-                        if (addUsage > 0) {
-                            usedMillis += addUsage
-                            usageMap[key] = usedMillis
-                            updated = true
-                        }
-                        if (usedMillis >= appLimit.maxUsageMillis) {
-                            kickUserOut("Rule ${rule.name}: Time Limit Reached!")
-                            kicked = true
-                            break
-                        }
-                    }
-                } else {
-                    if (appLimit != null) {
-                        val key = "${rule.id}_${activeDateStr}_$fgPackage"
-                        var usedMillis = usageMap[key] ?: 0L
-                        if (addUsage > 0) {
-                            usedMillis += addUsage
-                            usageMap[key] = usedMillis
-                            updated = true
-                        }
-                        if (usedMillis >= appLimit.maxUsageMillis) {
-                            kickUserOut("Rule ${rule.name}: App Blocked!")
-                            kicked = true
-                            break
-                        }
-                    }
-                }
-            }
-        }
-
-        if (updated) {
-            dataStoreManager.updateAppUsageMillis(usageMap)
-        }
-        
-        return kicked
-    }
-
-    private fun isTimeInRange(current: String, start: String, end: String): Boolean {
-        if (start == end) return true
-        if (start < end) {
-            return current in start..end
-        }
-        // crosses midnight (e.g. 22:00 to 06:00)
-        return current >= start || current <= end
+        return false
     }
 
     private fun kickUserOut(reason: String) {
